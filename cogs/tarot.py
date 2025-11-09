@@ -36,7 +36,7 @@ class Tarot(commands.Cog, name="tarot"):
         description="Test bots response",
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
-    async def testcommand(self, context: Context) -> None:
+    async def clihello(self, context: Context) -> None:
         """
         Check if the bot is alive.
 
