@@ -1,12 +1,13 @@
 services:
   discord-bot:
     build: .
-    image: python-discord-bot-template
+    image: cligm
     env_file:
       - .env
     volumes:
       - ./database:/bot/database
       - ./discord.log:/bot/discord.log
+      - ./tarot/:/tarot
 
     # Alternatively you can set the environment variables as such:
     # /!\ The token shouldn't be written here, as this file is not ignored from Git /!\
