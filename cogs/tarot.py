@@ -220,6 +220,10 @@ class Tarot(commands.Cog, name="tarot"):
             nickname = context.author.name
         return nickname
 
+    def get_decks(self, context):
+        # for now, just returns the two deck attributes, This will be useful once the bot is built to handle multiple decks per channel
+        return (self.player_deck, self.gm_deck)
+
     @commands.hybrid_command(
         name="clihello",
         description="Test bots response",
@@ -244,7 +248,8 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def draw_minor(self, context: Context) -> None:
-        result = self.player_deck.draw()
+        minordeck, majordeck = self.get_decks(context)
+        result = minordeck.draw()
 
         if result[1] == "NOCARD":
             embed = discord.Embed(
@@ -283,7 +288,8 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def draw_major(self, context: Context) -> None:
-        result = self.gm_deck.draw()
+        minordeck, majordeck = self.get_decks(context)
+        result = majordeck.draw()
 
         if result[1] == "NOCARD":
             embed = discord.Embed(
@@ -312,13 +318,17 @@ class Tarot(commands.Cog, name="tarot"):
 
             await context.send(file=img, embed=embed)
 
+
+
     @commands.hybrid_command(
         name="show_discard",
         description="Show the top card on the Players' discard pile",
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def show_discard(self, context: Context) -> None:
-        topcard = self.player_deck.show_discard()
+        minordeck, majordeck = self.get_decks(context)
+        topcard = minordeck.show_discard()
+
         if topcard[1] == "NOCARD":
             embed = discord.Embed(
                 title = "The discard pile is empty! You need to draw some cards!",
@@ -342,13 +352,17 @@ class Tarot(commands.Cog, name="tarot"):
 
             await context.send(file=img, embed=embed)
 
+
+
     @commands.hybrid_command(
         name="show_discard_major",
         description="Show the top card on the GM's discard pile",
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def show_discard_major(self, context: Context) -> None:
-        topcard = self.gm_deck.show_discard()
+        minordeck, majordeck = self.get_decks(context)
+        topcard = majordeck.show_discard()
+
         if topcard[1] == "NOCARD":
             embed = discord.Embed(
                 title = "The discard pile is empty! You need to draw some cards!",
@@ -381,7 +395,8 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def shuffle_minor(self, context: Context) -> None:
-        self.player_deck.shuffle()
+        minordeck, majordeck = self.get_decks(context)
+        minordeck.shuffle()
 
         img = discord.File(IMGDIR + "cardbacks.png", filename="cardbacks.png")
         embed = discord.Embed(
@@ -401,7 +416,8 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def shuffle_major(self, context: Context) -> None:
-        self.gm_deck.shuffle()
+        minordeck, majordeck = self.get_decks(context)
+        majordeck.shuffle()
 
         img = discord.File(IMGDIR + "cardbacks.png", filename="cardbacks.png")
         embed = discord.Embed(
@@ -421,8 +437,9 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def shuffle_both(self, context: Context) -> None:
-        self.player_deck.shuffle()
-        self.gm_deck.shuffle()
+        minordeck, majordeck = self.get_decks(context)
+        minordeck.shuffle()
+        majordeck.shuffle()
 
         img = discord.File(IMGDIR + "cardbacks.png", filename="cardbacks.png")
         embed = discord.Embed(
