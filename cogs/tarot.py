@@ -201,7 +201,13 @@ class Tarot(commands.Cog, name="tarot"):
         self.player_deck = Deck(major=False)
 
     # Here you can just add your own commands, you'll always need to provide "self" as first parameter.
-
+    def get_nick(self, context):
+        nickname = ""
+        if context.author.nick is not None:
+            nickname = context.author.nick
+        else:
+            nickname = context.author.name
+        return nickname
 
     @commands.hybrid_command(
         name="clihello",
@@ -244,7 +250,7 @@ class Tarot(commands.Cog, name="tarot"):
                 desc = desc + "\nThe Fool demands that you shuffle your decks!"
 
             embed = discord.Embed(
-                title="The adventurer " + context.author.nick + " tests Fate...",
+                title="The adventurer " + self.get_nick(context) + " tests Fate...",
                 description=desc,
                 color=0xBEBEFE,
             )
@@ -275,7 +281,7 @@ class Tarot(commands.Cog, name="tarot"):
                 desc = desc + "\nThis was the last card in the draw pile!"
 
             embed = discord.Embed(
-                title="The gamemaster " + context.author.nick + " draws a card...",
+                title="The gamemaster " + self.get_nick(context)+ " draws a card...",
                 description=desc,
                 color=0xBEBEFE,
             )
