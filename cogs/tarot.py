@@ -343,11 +343,11 @@ class Tarot(commands.Cog, name="tarot"):
             await context.send(file=img, embed=embed)
 
     @commands.hybrid_command(
-        name="show_discard_gm",
+        name="show_discard_major",
         description="Show the top card on the GM's discard pile",
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
-    async def show_discard_gm(self, context: Context) -> None:
+    async def show_discard_major(self, context: Context) -> None:
         topcard = self.gm_deck.show_discard()
         if topcard[1] == "NOCARD":
             embed = discord.Embed(
