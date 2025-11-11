@@ -79,11 +79,16 @@ VALUENAME = [
     "King of ",
 ]
 
+IMGDIR = "tarot/"
+IMGDIR_FLIPPED = "tarot_flipped/"
+
 class Card():
     def __init__(self, name, suit, value):
         self.name = name  #The full name of the card
         self.suit = suit  #The suit.  can be  wands, pentacles, cups, swords or major
         self.value = value #The value. is 1 for Aces, 11 for Pages, 12 for Knights, 13 for Queens, 14 for Kings, and 0 for The Fool
+        self.filename = self.suit + str(self.value).zfill(2) + ".png" #The filename to the card's corresponding picture
+        self.filepath = IMGDIR + self.filename
 
     def short_print(self): #prints the card in a shorthand manner
         if self.suit == "major":
@@ -110,10 +115,11 @@ class Card():
                 shortsuit = "P"
             elif self.suit == "cups":
                 shortsuit = "C"
-            elif self.suit = "swords":
+            elif self.suit == "swords":
                 shortsuit = "S"
 
             return shortval + shortsuit
+
 
 class Deck():
     def __init__(self, major):
@@ -143,12 +149,30 @@ class Deck():
 
 
     def draw(self):
+        msg = ""
         if len(self.drawpile) == 0:
-            return "NOCARD"
+            return (None, "NOCARD")
+        elif len(self.drawpile) == 1:
+            msg = "LASTCARD"
+        else:
+            msg = "OK"
         drawncard = self.drawpile.pop(random.randint(0,len(self.drawpile) - 1)) # draws a random card from the deck, removing it from drawpile
+        if drawncard.suit == "major" and drawncard.value == 0:
+            #if the card is The Fool, report that instead
+            msg = "FOOL"
         self.discardpile.append(drawncard) # adds the card to the discard pile
 
-        return drawncard.name  # returns just the name of the card!
+        return (drawncard, msg)  # returns the card that was drawn, and a status message!
+
+    def show_discard(self):
+        #shows the top card of the discard pile
+        if len(self.discardpile) != 0:
+            return self.discardpile[-1]
+        else:
+            return "NOCARD"
+
+
+
 
 
 
@@ -171,7 +195,13 @@ class Tarot(commands.Cog, name="tarot"):
     def __init__(self, bot) -> None:
         self.bot = bot
 
+        #for now, we're just doing one deck across the entire bot for testing purposes.
+        #Will do per-channel instances later.
+        self.gm_deck = Deck(major=True)
+        self.player_deck = Deck(major=False)
+
     # Here you can just add your own commands, you'll always need to provide "self" as first parameter.
+
 
     @commands.hybrid_command(
         name="clihello",
@@ -197,8 +227,98 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def draw_minor(self, context: Context) -> None:
-        #random.choice(os.listdir(/tarot/minor/))
-        pass
+        result = self.player_deck.draw()
+
+        if result[1] == "NOCARD":
+            embed = discord.Embed(
+                title = "The draw pile is empty, adventurer! You need to shuffle this deck!",
+                color=0xBE0000,
+            )
+            await context.send(embed=embed)
+        else:
+            img = discord.File(result[0].filepath, filename=result[0].filename)
+            desc = "You have drawn the *" + result[0].name + "*!"
+            if result[1] == "LASTCARD":
+                desc = desc + "\nThis was the last card in the draw pile!"
+            elif result[1] == "FOOL":
+                desc = desc + "\nThe Fool demands that you shuffle your decks!"
+
+            embed = discord.Embed(
+                title="The adventurer " + context.author.nick + " tests Fate...",
+                description=desc,
+                color=0xBEBEFE,
+            )
+            embed.set_image(url="attachment://" + result[0].filename)
+
+            await context.send(file=img, embed=embed)
+
+
+
+    @commands.hybrid_command(
+        name="draw_major",
+        description="Draw a card from the GM deck",
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def draw_major(self, context: Context) -> None:
+        result = self.gm_deck.draw()
+
+        if result[1] == "NOCARD":
+            embed = discord.Embed(
+                title = "The draw pile is empty, gamemaster! You need to shuffle this deck!",
+                color=0xBE0000,
+            )
+            await context.send(embed=embed)
+        else:
+            img = discord.File(result[0].filepath, filename=result[0].filename)
+            desc = "You have drawn the *" + result[0].name + "*!"
+            if result[1] == "LASTCARD":
+                desc = desc + "\nThis was the last card in the draw pile!"
+
+            embed = discord.Embed(
+                title="The gamemaster " + context.author.nick + " draws a card...",
+                description=desc,
+                color=0xBEBEFE,
+            )
+            embed.set_image(url="attachment://" + result[0].filename)
+
+            await context.send(file=img, embed=embed)
+
+
+    @commands.hybrid_command(
+        name="debug",
+        description="Show the status of all decks for debug purposes",
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def debug(self, context: Context) -> None:
+        desc = "**PLAYER DRAWPILE:**"
+
+        for card in self.player_deck.drawpile:
+            desc += "\n" + card.name + ", " + card.suit + ", " + str(card.value)
+
+        desc += "\n\n**PLAYER DISCARD PILE:**"
+
+        for card in self.player_deck.discardpile:
+            desc += "\n" + card.name + ", " + card.suit + ", " + str(card.value)
+
+        desc += "\n\n**GM DRAWPILE:**"
+
+        for card in self.gm_deck.drawpile:
+            desc += "\n" + card.name + ", " + card.suit + ", " + str(card.value)
+
+        desc += "\n\n**GM DISCARD PILE:**"
+
+        for card in self.gm_deck.discardpile:
+            desc += "\n" + card.name + ", " + card.suit + ", " + str(card.value)
+
+        embed = discord.Embed(
+            title = "Debug: Decks Status",
+            description = desc,
+            color=0xFFFFFF,
+        )
+
+        await context.send(embed=embed)
+
+
 
 # And then we finally add the cog to the bot so that it can load, unload, reload and use it's content.
 async def setup(bot) -> None:
