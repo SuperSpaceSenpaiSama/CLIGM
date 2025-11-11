@@ -87,8 +87,8 @@ class Card():
         self.name = name  #The full name of the card
         self.suit = suit  #The suit.  can be  wands, pentacles, cups, swords or major
         self.value = value #The value. is 1 for Aces, 11 for Pages, 12 for Knights, 13 for Queens, 14 for Kings, and 0 for The Fool
+        self.is_reversed = False #whether the card is reversed or not. doesn't really affect rules'
         self.filename = self.suit + str(self.value).zfill(2) + ".png" #The filename to the card's corresponding picture
-        self.filepath = IMGDIR + self.filename
 
     def short_print(self): #prints the card in a shorthand manner
         if self.suit == "major":
@@ -119,6 +119,12 @@ class Card():
                 shortsuit = "S"
 
             return shortval + shortsuit
+
+    def get_filepath(self): #gets the filepath for the card, depending on if it is flipped or not
+        if self.is_reversed:
+            return IMGDIR_FLIPPED + self.filename
+        else:
+            return IMGDIR + self.filename
 
 
 class Deck():
@@ -162,14 +168,17 @@ class Deck():
             msg = "FOOL"
         self.discardpile.append(drawncard) # adds the card to the discard pile
 
+        drawncard.is_reversed = bool(random.getrandbits(1)) #coinflip on whether card is reversed or not upon drawing
+
+
         return (drawncard, msg)  # returns the card that was drawn, and a status message!
 
     def show_discard(self):
         #shows the top card of the discard pile
         if len(self.discardpile) != 0:
-            return self.discardpile[-1]
+            return (self.discardpile[-1], "")
         else:
-            return "NOCARD"
+            return ("", "NOCARD")
 
 
 
@@ -205,6 +214,8 @@ class Tarot(commands.Cog, name="tarot"):
         nickname = ""
         if context.author.nick is not None:
             nickname = context.author.nick
+        elif context.author.display_name is not None:
+            nickname = context.author.display_name
         else:
             nickname = context.author.name
         return nickname
@@ -242,13 +253,19 @@ class Tarot(commands.Cog, name="tarot"):
             )
             await context.send(embed=embed)
         else:
-            img = discord.File(result[0].filepath, filename=result[0].filename)
-            desc = "You have drawn the *" + result[0].name + "*!"
+
+            desc = "You have drawn the "
+            if result[0].is_reversed:
+                desc += "**Reversed** *" + result[0].name + "*!"
+            else:
+                desc += "*" + result[0].name + "*!"
+
             if result[1] == "LASTCARD":
                 desc = desc + "\nThis was the last card in the draw pile!"
             elif result[1] == "FOOL":
                 desc = desc + "\nThe Fool demands that you shuffle your decks!"
 
+            img = discord.File(result[0].get_filepath(), filename=result[0].filename)
             embed = discord.Embed(
                 title="The adventurer " + self.get_nick(context) + " tests Fate...",
                 description=desc,
@@ -275,11 +292,17 @@ class Tarot(commands.Cog, name="tarot"):
             )
             await context.send(embed=embed)
         else:
-            img = discord.File(result[0].filepath, filename=result[0].filename)
-            desc = "You have drawn the *" + result[0].name + "*!"
+
+            desc = "You have drawn the "
+            if result[0].is_reversed:
+                desc += "**Reversed** *" + result[0].name + "*!"
+            else:
+                desc += "*" + result[0].name + "*!"
+
             if result[1] == "LASTCARD":
                 desc = desc + "\nThis was the last card in the draw pile!"
 
+            img = discord.File(result[0].get_filepath(), filename=result[0].filename)
             embed = discord.Embed(
                 title="The gamemaster " + self.get_nick(context)+ " draws a card...",
                 description=desc,
@@ -288,6 +311,68 @@ class Tarot(commands.Cog, name="tarot"):
             embed.set_image(url="attachment://" + result[0].filename)
 
             await context.send(file=img, embed=embed)
+
+    @commands.hybrid_command(
+        name="show_discard",
+        description="Show the top card on the Players' discard pile",
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def show_discard(self, context: Context) -> None:
+        topcard = self.player_deck.show_discard()
+        if topcard[1] == "NOCARD":
+            embed = discord.Embed(
+                title = "The discard pile is empty! You need to draw some cards!",
+                color=0xBE0000,
+            )
+            await context.send(embed=embed)
+        else:
+            desc = "The top card in the players' discard pile is the "
+            if topcard[0].is_reversed:
+                desc += "**Reversed** *" + topcard[0].name + "*!"
+            else:
+                desc += "*" + topcard[0].name + "*!"
+
+            img = discord.File(topcard[0].get_filepath(), filename=topcard[0].filename)
+            embed = discord.Embed(
+                title= self.get_nick(context) + " peeks at the top of the discard pile...",
+                description=desc,
+                color=0xBEBEFE,
+            )
+            embed.set_image(url="attachment://" + topcard[0].filename)
+
+            await context.send(file=img, embed=embed)
+
+    @commands.hybrid_command(
+        name="show_discard_gm",
+        description="Show the top card on the GM's discard pile",
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def show_discard_gm(self, context: Context) -> None:
+        topcard = self.gm_deck.show_discard()
+        if topcard[1] == "NOCARD":
+            embed = discord.Embed(
+                title = "The discard pile is empty! You need to draw some cards!",
+                color=0xBE0000,
+            )
+            await context.send(embed=embed)
+        else:
+            desc = "The top card in the GM's discard pile is the "
+            if topcard[0].is_reversed:
+                desc += "**Reversed** *" + topcard[0].name + "*!"
+            else:
+                desc += "*" + topcard[0].name + "*!"
+
+            img = discord.File(topcard[0].get_filepath(), filename=topcard[0].filename)
+            embed = discord.Embed(
+                title= self.get_nick(context) + " peeks at the top of the discard pile...",
+                description=desc,
+                color=0xBEBEFE,
+            )
+            embed.set_image(url="attachment://" + topcard[0].filename)
+
+            await context.send(file=img, embed=embed)
+
+
 
 
     @commands.hybrid_command(
