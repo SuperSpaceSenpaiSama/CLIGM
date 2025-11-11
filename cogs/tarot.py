@@ -376,6 +376,68 @@ class Tarot(commands.Cog, name="tarot"):
 
 
     @commands.hybrid_command(
+        name="shuffle_minor",
+        description="shuffles the entire Players' deck back into the draw pile."
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def shuffle_minor(self, context: Context) -> None:
+        self.player_deck.shuffle()
+
+        img = discord.File(IMGDIR + "cardbacks.png", filename="cardbacks.png")
+        embed = discord.Embed(
+            title= self.get_nick(context) + " shuffles the Players' deck...",
+            description = "Now you can draw again, and test your fate...",
+            color=0xBEBEFE,
+        )
+        embed.set_image(url="attachment://cardbacks.png")
+
+        await context.send(file=img, embed=embed)
+
+
+
+    @commands.hybrid_command(
+        name="shuffle_major",
+        description="shuffles the entire GM's deck back into the draw pile."
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def shuffle_major(self, context: Context) -> None:
+        self.gm_deck.shuffle()
+
+        img = discord.File(IMGDIR + "cardbacks.png", filename="cardbacks.png")
+        embed = discord.Embed(
+            title= self.get_nick(context) + " shuffles the GM's deck...",
+            description = "Now you can draw again, and herald disaster...",
+            color=0xBEBEFE,
+        )
+        embed.set_image(url="attachment://cardbacks.png")
+
+        await context.send(file=img, embed=embed)
+
+
+
+    @commands.hybrid_command(
+        name="shuffle_both",
+        description="shuffles both decks back into their draw piles."
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def shuffle_both(self, context: Context) -> None:
+        self.player_deck.shuffle()
+        self.gm_deck.shuffle()
+
+        img = discord.File(IMGDIR + "cardbacks.png", filename="cardbacks.png")
+        embed = discord.Embed(
+            title= self.get_nick(context) + " shuffles both decks...",
+            description = "Now you can draw again, and weave our tale...",
+            color=0xBEBEFE,
+        )
+        embed.set_image(url="attachment://cardbacks.png")
+
+        await context.send(file=img, embed=embed)
+
+
+
+
+    @commands.hybrid_command(
         name="debug",
         description="Show the status of all decks for debug purposes",
     )
