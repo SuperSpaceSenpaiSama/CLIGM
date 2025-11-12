@@ -94,7 +94,7 @@ GMCOLOR = 0xF5DA27
 ERRORCOLOR = 0xBE0000
 
 def merge_images(filelist):
-    maxcol = 5 #maximum number of cards per row
+    maxcol = 6 #maximum number of cards per row
     gap_percent = 0.05 # how much space between each card, based off its width
 
     imagelist = []
@@ -604,6 +604,8 @@ class Tarot(commands.Cog, name="tarot"):
 
         output = minordeck.deal_cards(4, player) #deal hand to the player. use the player's unique username (instead of their mutable & non-unique Display Name) as the key
 
+        await context.interaction.response.defer()
+
         if output[0] == "NOHAND":
             embed = discord.Embed(
                 title = "All cards are in someone's hand!!!",
@@ -649,7 +651,7 @@ class Tarot(commands.Cog, name="tarot"):
             )
             embed3.set_image(url="attachment://" + MERGEDIMG)
 
-            await context.interaction.response.send_message(embed=embed3, ephemeral = True, file=img)
+            await context.interaction.followup.send(embed=embed3, ephemeral = True, file=img)
 
     @commands.hybrid_command(
         name="deal_gm",
@@ -665,6 +667,8 @@ class Tarot(commands.Cog, name="tarot"):
         player = context.author.name
 
         output = majordeck.deal_cards(cardcount, player) #deal hand to the player. use the player's unique username (instead of their mutable & non-unique Display Name) as the key
+
+        await context.interaction.response.defer()
 
         if output[0] == "NOHAND":
             embed = discord.Embed(
@@ -695,7 +699,7 @@ class Tarot(commands.Cog, name="tarot"):
             desc = ""
             imagefiles = []
             for card in majordeck.hands[player]:
-                desc += "The " + card.name + "\n"
+                desc +=  card.name + "\n"
                 imagefiles.append(IMGDIR + card.filename)
 
             desc = desc[:-1] #removes the final \n character
@@ -711,7 +715,7 @@ class Tarot(commands.Cog, name="tarot"):
             )
             embed3.set_image(url="attachment://" + MERGEDIMG)
 
-            await context.interaction.response.send_message(embed=embed3, ephemeral = True, file=img)
+            await context.interaction.followup.send(embed=embed3, ephemeral = True, file=img)
 
 
 
