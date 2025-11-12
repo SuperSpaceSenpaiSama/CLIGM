@@ -10,6 +10,8 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context
 import os, random
+import math
+from PIL import Image
 
 SHORTMAJOR = [
     "0-Fool",
@@ -82,6 +84,52 @@ VALUENAME = [
 IMGDIR = "tarot/"
 IMGDIR_FLIPPED = "tarot_flipped/"
 
+MERGEDIMG = "mergedimage.png"
+
+def merge_images(filelist):
+    maxcol = 5 #maximum number of cards per row
+    gap_percent = 0.05 # how much space between each card, based off its width
+
+    imagelist = []
+    for f in filelist:
+        imagelist.append(Image.open(f))
+
+    #we are assuming that all card pics are of the same dimensions
+    (card_w, card_h) = imagelist[0].size
+    cardcount = len(imagelist)
+    gap = round(card_w * gap_percent)
+
+    final_w = 0
+    final_h = 0
+    if cardcount < maxcol:
+        final_w = (card_w * cardcount) + (gap * (cardcount - 1))
+        final_h = card_h
+    else:
+        rowcnt = math.ceil(cardcount/maxcol)
+        final_w = (card_w * maxcol) + (gap * (maxcol - 1))
+        final_h = (card_h * rowcnt) + (gap * (rowcnt - 1))
+
+    result = Image.new('RGBA', (final_w, final_h))
+
+    x=0
+    y=0
+    xmul = card_w + gap
+    ymul = card_h + gap
+    for img in imagelist:
+        result.paste(im=img, box=(x*xmul, y*ymul))
+
+        x += 1
+        if x == maxcol:
+            x = 0
+            y += 1
+
+    result.save(IMGDIR + MERGEDIMG, "PNG")
+
+
+
+
+
+
 class Card():
     def __init__(self, name, suit, value):
         self.name = name  #The full name of the card
@@ -131,7 +179,7 @@ class Deck():
     def __init__(self, major):
         self.drawpile = []
         self.discardpile = []
-        self.hands = []
+        self.hands = {}
 
         if major: # major is true,  this is the GM's deck. All Major arcana save for fool
             for i in range(1,22):
@@ -151,7 +199,12 @@ class Deck():
                 crd = self.discardpile.pop()
                 self.drawpile.append(crd)
 
-            # write code for  shuffling HANDS here!!!
+            #hands should  probably not be shuffled in by default
+            #
+            #for player in self.hands:
+            #    while len(hands[player]) > 0:
+            #        crd = hands[player].pop()
+            #        self.drawpile.append(crd)
 
 
     def draw(self):
@@ -179,6 +232,28 @@ class Deck():
             return (self.discardpile[-1], "")
         else:
             return ("", "NOCARD")
+
+    def deal_cards(self, cardcount, username):
+        #first, check if the player has a hand list already. if not, create it
+        if username not in self.hands:
+            self.hands[username] = []
+
+        msg = ""
+        cnt = 0
+        for i in range(cardcount):
+            if len(self.drawpile) == 0:
+               #lets the command know that the deck had to be shuffled to get the last i cards
+               msg = "SHUFFLED"
+               cnt = i
+               self.shuffle()
+               if len(self.drawpile) == 0:
+                   #if the drawpile is STILL empty right after shuffling, that means all cards are in someone's hands. this should never happen, return an error code anyways
+                    msg = "NOCARD"
+                    break
+            crd = self.drawpile.pop(random.randint(0,len(self.drawpile) - 1)) #draws a random card from the deck, as many times as needed
+            self.hands[username].append(crd) #adds the card to the user's hand
+        return (msg, cnt)
+
 
 
 
@@ -391,7 +466,7 @@ class Tarot(commands.Cog, name="tarot"):
 
     @commands.hybrid_command(
         name="shuffle_minor",
-        description="shuffles the entire Players' deck back into the draw pile."
+        description="shuffles the Players' discard pile back into the draw pile."
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def shuffle_minor(self, context: Context) -> None:
@@ -412,7 +487,7 @@ class Tarot(commands.Cog, name="tarot"):
 
     @commands.hybrid_command(
         name="shuffle_major",
-        description="shuffles the entire GM's deck back into the draw pile."
+        description="shuffles the GM's discard pile back into the draw pile."
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def shuffle_major(self, context: Context) -> None:
@@ -433,7 +508,7 @@ class Tarot(commands.Cog, name="tarot"):
 
     @commands.hybrid_command(
         name="shuffle_both",
-        description="shuffles both decks back into their draw piles."
+        description="shuffles both discard piles back into their respective draw piles."
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def shuffle_both(self, context: Context) -> None:
@@ -460,25 +535,43 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def debug(self, context: Context) -> None:
+        minordeck, majordeck = self.get_decks(context)
+
         desc = "**PLAYER DRAWPILE:**"
 
-        for card in self.player_deck.drawpile:
+        for card in minordeck.drawpile:
             desc += "\n" + card.name + ", " + card.suit + ", " + str(card.value)
 
         desc += "\n\n**PLAYER DISCARD PILE:**"
 
-        for card in self.player_deck.discardpile:
+        for card in minordeck.discardpile:
             desc += "\n" + card.name + ", " + card.suit + ", " + str(card.value)
+
+        desc += "\n\n**PLAYER HANDS**"
+
+        for player in minordeck.hands:
+            desc += "\n**Hand of " + player +":**"
+
+            for card in minordeck.hands[player]:
+                desc += "\n  - " + card.name
 
         desc += "\n\n**GM DRAWPILE:**"
 
-        for card in self.gm_deck.drawpile:
+        for card in majordeck.drawpile:
             desc += "\n" + card.name + ", " + card.suit + ", " + str(card.value)
 
         desc += "\n\n**GM DISCARD PILE:**"
 
-        for card in self.gm_deck.discardpile:
+        for card in majordeck.discardpile:
             desc += "\n" + card.name + ", " + card.suit + ", " + str(card.value)
+
+        desc += "\n\n**GM HANDS**"
+
+        for player in majordeck.hands:
+            desc += "\n**Hand of " + player +":**"
+
+            for card in majordeck.hands[player]:
+                desc += "\n  - " + card.name
 
         embed = discord.Embed(
             title = "Debug: Decks Status",
@@ -487,6 +580,71 @@ class Tarot(commands.Cog, name="tarot"):
         )
 
         await context.send(embed=embed)
+
+
+
+    #Here begins the commands for Challenge Phase play!
+
+    @commands.hybrid_command(
+        name="deal_player",
+        description="Draw 4 cards from the Player's deck, and then hold them in your hand."
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def deal_player(self, context: Context) -> None:
+        minordeck, majordeck = self.get_decks(context)
+
+        player = context.author.name
+
+        output = minordeck.deal_cards(4, player) #deal hand to the player. use the player's unique username (instead of their mutable & non-unique Display Name) as the key
+
+        if output[0] == "NOHAND":
+            embed = discord.Embed(
+                title = "All cards are in someone's hand!!!",
+                description = "How did you even manage this? Please use the end-of-round command to reset the Player's deck.",
+                color=0xBE0000
+            )
+
+            await context.send(embed=embed)
+        else:
+            if output[0] == "SHUFFLED":
+                embed = discord.Embed(
+                    title = "The draw pile has run out with " + str(output[1]) + " card(s) left to draw!",
+                    description = "Shuffling the Player's discard pile...",
+                    color=0XBEFEFE
+                )
+
+                await context.channel.send(embed=embed)
+
+            embed2 = discord.Embed(
+                title = "The adventurer " + self.get_nick(context) + " deals 4 cards into their hand!",
+                description="What sort of strategems lie hidden between your fingers...?",
+                color=0xBEFEFE
+            )
+            await context.channel.send(embed=embed2)
+
+            #await context.send("test maesegae!!")
+
+            desc = ""
+            imagefiles = []
+            for card in minordeck.hands[player]:
+                desc += "The " + card.name + "\n"
+                imagefiles.append(IMGDIR + card.filename)
+
+            desc = desc[:-1] #removes the final \n character
+
+            #sets up the embed image
+            merge_images(imagefiles)
+            img = discord.File(IMGDIR + MERGEDIMG, filename=MERGEDIMG)
+
+            embed3 = discord.Embed(
+                title = "You have drawn the following cards, " + self.get_nick(context) + ". Use them wisely!",
+                description = desc,
+                color = 0x350080,
+            )
+            embed3.set_image(url="attachment://" + MERGEDIMG)
+
+            await context.interaction.response.send_message(embed=embed3, ephemeral = True, file=img)
+
 
 
 
