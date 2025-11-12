@@ -86,6 +86,13 @@ IMGDIR_FLIPPED = "tarot_flipped/"
 
 MERGEDIMG = "mergedimage.png"
 
+#the colors used for embed messages
+INVISCOLOR = 0x350080
+NEUTRALCOLOR = 0xBEBEFE
+PLAYERCOLOR = 0x04BF22
+GMCOLOR = 0xF5DA27
+ERRORCOLOR = 0xBE0000
+
 def merge_images(filelist):
     maxcol = 5 #maximum number of cards per row
     gap_percent = 0.05 # how much space between each card, based off its width
@@ -313,7 +320,7 @@ class Tarot(commands.Cog, name="tarot"):
         embed = discord.Embed(
             title="Hiya!",
             description=f"The bot latency is {round(self.bot.latency * 1000)}ms.",
-            color=0xBEBEFE,
+            color=NEUTRALCOLOR,
         )
         await context.send(embed=embed)
 
@@ -329,7 +336,7 @@ class Tarot(commands.Cog, name="tarot"):
         if result[1] == "NOCARD":
             embed = discord.Embed(
                 title = "The draw pile is empty, adventurer! You need to shuffle this deck!",
-                color=0xBE0000,
+                color=ERRORCOLOR,
             )
             await context.send(embed=embed)
         else:
@@ -349,7 +356,7 @@ class Tarot(commands.Cog, name="tarot"):
             embed = discord.Embed(
                 title="The adventurer " + self.get_nick(context) + " tests Fate...",
                 description=desc,
-                color=0xBEBEFE,
+                color=PLAYERCOLOR,
             )
             embed.set_image(url="attachment://" + result[0].filename)
 
@@ -369,7 +376,7 @@ class Tarot(commands.Cog, name="tarot"):
         if result[1] == "NOCARD":
             embed = discord.Embed(
                 title = "The draw pile is empty, gamemaster! You need to shuffle this deck!",
-                color=0xBE0000,
+                color=ERRORCOLOR,
             )
             await context.send(embed=embed)
         else:
@@ -387,7 +394,7 @@ class Tarot(commands.Cog, name="tarot"):
             embed = discord.Embed(
                 title="The gamemaster " + self.get_nick(context)+ " draws a card...",
                 description=desc,
-                color=0xBEBEFE,
+                color=GMCOLOR,
             )
             embed.set_image(url="attachment://" + result[0].filename)
 
@@ -407,7 +414,7 @@ class Tarot(commands.Cog, name="tarot"):
         if topcard[1] == "NOCARD":
             embed = discord.Embed(
                 title = "The discard pile is empty! You need to draw some cards!",
-                color=0xBE0000,
+                color=ERRORCOLOR,
             )
             await context.send(embed=embed)
         else:
@@ -421,7 +428,7 @@ class Tarot(commands.Cog, name="tarot"):
             embed = discord.Embed(
                 title= self.get_nick(context) + " peeks at the top of the discard pile...",
                 description=desc,
-                color=0xBEBEFE,
+                color=NEUTRALCOLOR,
             )
             embed.set_image(url="attachment://" + topcard[0].filename)
 
@@ -441,7 +448,7 @@ class Tarot(commands.Cog, name="tarot"):
         if topcard[1] == "NOCARD":
             embed = discord.Embed(
                 title = "The discard pile is empty! You need to draw some cards!",
-                color=0xBE0000,
+                color=ERRORCOLOR,
             )
             await context.send(embed=embed)
         else:
@@ -455,7 +462,7 @@ class Tarot(commands.Cog, name="tarot"):
             embed = discord.Embed(
                 title= self.get_nick(context) + " peeks at the top of the discard pile...",
                 description=desc,
-                color=0xBEBEFE,
+                color=NEUTRALCOLOR,
             )
             embed.set_image(url="attachment://" + topcard[0].filename)
 
@@ -477,7 +484,7 @@ class Tarot(commands.Cog, name="tarot"):
         embed = discord.Embed(
             title= self.get_nick(context) + " shuffles the Players' deck...",
             description = "Now you can draw again, and test your fate...",
-            color=0xBEBEFE,
+            color=PLAYERCOLOR,
         )
         embed.set_image(url="attachment://cardbacks.png")
 
@@ -498,7 +505,7 @@ class Tarot(commands.Cog, name="tarot"):
         embed = discord.Embed(
             title= self.get_nick(context) + " shuffles the GM's deck...",
             description = "Now you can draw again, and herald disaster...",
-            color=0xBEBEFE,
+            color=GMCOLOR,
         )
         embed.set_image(url="attachment://cardbacks.png")
 
@@ -520,7 +527,7 @@ class Tarot(commands.Cog, name="tarot"):
         embed = discord.Embed(
             title= self.get_nick(context) + " shuffles both decks...",
             description = "Now you can draw again, and weave our tale...",
-            color=0xBEBEFE,
+            color=NEUTRALCOLOR,
         )
         embed.set_image(url="attachment://cardbacks.png")
 
@@ -576,7 +583,7 @@ class Tarot(commands.Cog, name="tarot"):
         embed = discord.Embed(
             title = "Debug: Decks Status",
             description = desc,
-            color=0xFFFFFF,
+            color=NEUTRALCOLOR,
         )
 
         await context.send(embed=embed)
@@ -587,7 +594,7 @@ class Tarot(commands.Cog, name="tarot"):
 
     @commands.hybrid_command(
         name="deal_player",
-        description="Draw 4 cards from the Player's deck, and then hold them in your hand."
+        description="Draw 4 cards from the Players' deck, and then hold them in your hand."
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def deal_player(self, context: Context) -> None:
@@ -601,7 +608,7 @@ class Tarot(commands.Cog, name="tarot"):
             embed = discord.Embed(
                 title = "All cards are in someone's hand!!!",
                 description = "How did you even manage this? Please use the end-of-round command to reset the Player's deck.",
-                color=0xBE0000
+                color=ERRORCOLOR
             )
 
             await context.send(embed=embed)
@@ -610,19 +617,18 @@ class Tarot(commands.Cog, name="tarot"):
                 embed = discord.Embed(
                     title = "The draw pile has run out with " + str(output[1]) + " card(s) left to draw!",
                     description = "Shuffling the Player's discard pile...",
-                    color=0XBEFEFE
+                    color=PLAYERCOLOR
                 )
 
                 await context.channel.send(embed=embed)
 
             embed2 = discord.Embed(
-                title = "The adventurer " + self.get_nick(context) + " deals 4 cards into their hand!",
+                title = "The Adventurer " + self.get_nick(context) + " deals 4 cards into their hand!",
                 description="What sort of strategems lie hidden between your fingers...?",
-                color=0xBEFEFE
+                color=PLAYERCOLOR
             )
             await context.channel.send(embed=embed2)
 
-            #await context.send("test maesegae!!")
 
             desc = ""
             imagefiles = []
@@ -639,7 +645,69 @@ class Tarot(commands.Cog, name="tarot"):
             embed3 = discord.Embed(
                 title = "You have drawn the following cards, " + self.get_nick(context) + ". Use them wisely!",
                 description = desc,
-                color = 0x350080,
+                color = INVISCOLOR,
+            )
+            embed3.set_image(url="attachment://" + MERGEDIMG)
+
+            await context.interaction.response.send_message(embed=embed3, ephemeral = True, file=img)
+
+    @commands.hybrid_command(
+        name="deal_gm",
+        description="Draw cards from the GM's deck, and then hold them in your hand."
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    @app_commands.describe(
+        cardcount="How many cards are you drawing?"
+    )
+    async def deal_gm(self, context: Context, cardcount: int) -> None:
+        minordeck, majordeck = self.get_decks(context)
+
+        player = context.author.name
+
+        output = majordeck.deal_cards(cardcount, player) #deal hand to the player. use the player's unique username (instead of their mutable & non-unique Display Name) as the key
+
+        if output[0] == "NOHAND":
+            embed = discord.Embed(
+                title = "All cards are in someone's hand!!!",
+                description = "How did you even manage this? Please use the end-of-round command to reset the Player's deck.",
+                color=ERRORCOLOR
+            )
+
+            await context.send(embed=embed)
+        else:
+            if output[0] == "SHUFFLED":
+                embed = discord.Embed(
+                    title = "The draw pile has run out with " + str(output[1]) + " card(s) left to draw!",
+                    description = "Shuffling the GM's discard pile...",
+                    color=GMCOLOR
+                )
+
+                await context.channel.send(embed=embed)
+
+            embed2 = discord.Embed(
+                title = "The Gamemaster " + self.get_nick(context) + " deals " + str(cardcount) + " cards into their hand!",
+                description="What sorts of doom does The Dungeon have in store now...?",
+                color=GMCOLOR
+            )
+            await context.channel.send(embed=embed2)
+
+
+            desc = ""
+            imagefiles = []
+            for card in majordeck.hands[player]:
+                desc += "The " + card.name + "\n"
+                imagefiles.append(IMGDIR + card.filename)
+
+            desc = desc[:-1] #removes the final \n character
+
+            #sets up the embed image
+            merge_images(imagefiles)
+            img = discord.File(IMGDIR + MERGEDIMG, filename=MERGEDIMG)
+
+            embed3 = discord.Embed(
+                title = "You have drawn the following cards, " + self.get_nick(context) + ". Use them wisely!",
+                description = desc,
+                color = INVISCOLOR,
             )
             embed3.set_image(url="attachment://" + MERGEDIMG)
 
