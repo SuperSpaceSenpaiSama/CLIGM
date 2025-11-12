@@ -306,6 +306,28 @@ class Tarot(commands.Cog, name="tarot"):
         # for now, just returns the two deck attributes, This will be useful once the bot is built to handle multiple decks per channel
         return (self.player_deck, self.gm_deck)
 
+    async def show_hand(self, context: Context, deck: Deck, player: str, prefix: str):
+        desc = ""
+        imagefiles = []
+        for card in deck.hands[player]:
+            desc += prefix + card.name + "\n"
+            imagefiles.append(IMGDIR + card.filename)
+
+        desc = desc[:-1] #removes the final \n character
+
+        #sets up the embed image
+        merge_images(imagefiles)
+        img = discord.File(IMGDIR + MERGEDIMG, filename=MERGEDIMG)
+
+        embed3 = discord.Embed(
+            title = "You have drawn the following cards, " + self.get_nick(context) + ". Use them wisely!",
+            description = desc,
+            color = INVISCOLOR,
+        )
+        embed3.set_image(url="attachment://" + MERGEDIMG)
+
+        await context.interaction.followup.send(embed=embed3, ephemeral = True, file=img)
+
     @commands.hybrid_command(
         name="clihello",
         description="Test bots response",
@@ -632,26 +654,7 @@ class Tarot(commands.Cog, name="tarot"):
             await context.channel.send(embed=embed2)
 
 
-            desc = ""
-            imagefiles = []
-            for card in minordeck.hands[player]:
-                desc += "The " + card.name + "\n"
-                imagefiles.append(IMGDIR + card.filename)
-
-            desc = desc[:-1] #removes the final \n character
-
-            #sets up the embed image
-            merge_images(imagefiles)
-            img = discord.File(IMGDIR + MERGEDIMG, filename=MERGEDIMG)
-
-            embed3 = discord.Embed(
-                title = "You have drawn the following cards, " + self.get_nick(context) + ". Use them wisely!",
-                description = desc,
-                color = INVISCOLOR,
-            )
-            embed3.set_image(url="attachment://" + MERGEDIMG)
-
-            await context.interaction.followup.send(embed=embed3, ephemeral = True, file=img)
+            await self.show_hand(context, minordeck, player, "The ")
 
     @commands.hybrid_command(
         name="deal_gm",
@@ -695,27 +698,7 @@ class Tarot(commands.Cog, name="tarot"):
             )
             await context.channel.send(embed=embed2)
 
-
-            desc = ""
-            imagefiles = []
-            for card in majordeck.hands[player]:
-                desc +=  card.name + "\n"
-                imagefiles.append(IMGDIR + card.filename)
-
-            desc = desc[:-1] #removes the final \n character
-
-            #sets up the embed image
-            merge_images(imagefiles)
-            img = discord.File(IMGDIR + MERGEDIMG, filename=MERGEDIMG)
-
-            embed3 = discord.Embed(
-                title = "You have drawn the following cards, " + self.get_nick(context) + ". Use them wisely!",
-                description = desc,
-                color = INVISCOLOR,
-            )
-            embed3.set_image(url="attachment://" + MERGEDIMG)
-
-            await context.interaction.followup.send(embed=embed3, ephemeral = True, file=img)
+            await self.show_hand(context, majordeck, player, "")
 
 
 
