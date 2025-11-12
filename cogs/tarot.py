@@ -258,7 +258,10 @@ class Deck():
                     msg = "NOCARD"
                     break
             crd = self.drawpile.pop(random.randint(0,len(self.drawpile) - 1)) #draws a random card from the deck, as many times as needed
+            crd.is_reversed = bool(random.getrandbits(1)) #coinflip on if card is reversed. No mechanical diff, just flavoring
+
             self.hands[username].append(crd) #adds the card to the user's hand
+
         return (msg, cnt)
 
 
@@ -309,9 +312,17 @@ class Tarot(commands.Cog, name="tarot"):
     async def show_hand(self, context: Context, deck: Deck, player: str, prefix: str):
         desc = ""
         imagefiles = []
+        rev = ""
+        carddir = ""
         for card in deck.hands[player]:
-            desc += prefix + card.name + "\n"
-            imagefiles.append(IMGDIR + card.filename)
+            if card.is_reversed:
+                rev = " **(R)**"
+                carddir = IMGDIR_FLIPPED
+            else:
+                rev = ""
+                carddir = IMGDIR
+            desc += prefix + card.name + rev + "\n"
+            imagefiles.append(carddir + card.filename)
 
         desc = desc[:-1] #removes the final \n character
 
