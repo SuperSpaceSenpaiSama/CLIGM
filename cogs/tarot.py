@@ -347,8 +347,9 @@ class Deck():
 
     def cleanup_hand(self, username):
         #get rid of empty hands  to save on space
-        if len(self.hands[username]) == 0:
-            del self.hands[username]
+        if username in self.hands:
+            if len(self.hands[username]) == 0:
+                del self.hands[username]
 
 
     #here start the methods for facedown cards!
@@ -385,6 +386,13 @@ class Deck():
         self.cleanup_hand(username)
 
         return (card, "")
+
+    def discard_facedown (self, charname):
+        if charname not in self.facedowns:
+            return ("", "NOCARD")
+        else:
+            card = self.facedowns.pop(charname)
+            return (card, "")
 
 
 
@@ -1311,7 +1319,7 @@ class Tarot(commands.Cog, name="tarot"):
         if value < 1 or value > 14:
             embed = discord.Embed(
                 title = self.get_nick(interaction.user) + " tried to play a card that does not exist!",
-                description = "Please check your input, adventurer :P",
+                description = "If you tried, remember that you can't play The Fool facedown.",
                 color=ERRORCOLOR
             )
             await interaction.response.send_message(embed=embed)
@@ -1344,7 +1352,7 @@ class Tarot(commands.Cog, name="tarot"):
 
                 await interaction.response.send_message(embed=embed)
             else:
-                #the player was able to place the facedownc ard!
+                #the player was able to place the facedown card!
 
                 imagename = ""
                 if action_type.value: # if it is a main action, use the upright cardbacks
@@ -1365,6 +1373,147 @@ class Tarot(commands.Cog, name="tarot"):
 
 
 
+    @app_commands.command(
+        name="facedown_major",
+        description="Play a GM card facedown for a monster, to spring later!",
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    @app_commands.describe(
+        value="What is the number value of the card? Ace = 1, Page = 11, Knight = 12, Queen = 13, King = 14",
+        action_type="Are you playing this as a Main action during your turn, or a Minor action outside of your turn?",
+        monster="The name of the monster playing this card. Please give each monster a unique name!"
+    )
+    @app_commands.choices(
+        action_type=[
+            app_commands.Choice(name="Main",value=1),
+            app_commands.Choice(name="Minor",value=0)
+        ]
+    )
+    async def facedown_major(self, interaction: discord.Interaction, monster: str, value: int, action_type: app_commands.Choice[int]):
+        minordeck, majordeck = self.get_decks(interaction.channel)
+        player = interaction.user.name
+
+        if value < 1 or value > 21:
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + " tried to play a card that does not exist!",
+                description = "Please be more careul, gamemaster!",
+                color=ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed)
+        else:
+            result = majordeck.play_facedown(player, monster, value, "major", action_type.value)
+
+            #check if hand is empty or the card was not empty.
+            if result[1] == "HANDEMPTY":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to play a card, but their hand is empty!",
+                    description = "Please be more careful, gamemaster.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            elif result[1] == "NOCARD":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to play a card that they do not have!",
+                    description = "Please /peek at your hand to see what cards you *can* play, gamemaster.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            elif result[1] == "HASFACEDOWN":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to place a card facedown for " + monster + ", but it already has another facedown card!",
+                    description = "Please /discard_facedown your monster's previous card if you want it to make a new facedown action, gamemaster.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            else:
+                #the player was able to place the facedown card!
+
+                imagename = ""
+                if action_type.value: # if it is a main action, use the upright cardbacks
+                    imagename = "cardbacks.png"
+                else:
+                    #if it is a minor action, use sideways cardbacks
+                    imagename = "sidewaysbacks.png"
+
+                img = discord.File(IMGDIR + imagename,  filename=imagename)
+                embed = discord.Embed(
+                    title="The gamemaster " + self.get_nick(interaction.user) + " places a card facedown for " + monster + " as a *" + action_type.name + "* Action!",
+                    description="Who knows how powerful it is...?",
+                    color=GMCOLOR,
+                )
+                embed.set_image(url="attachment://" + imagename)
+
+                await interaction.response.send_message(file=img, embed=embed)
+
+    @app_commands.command(
+        name = "discard_facedown",
+        description = "Discards curr    ent facedown card, if you cannot or don't want to activate it.'"
+    )
+    @app_commands.describe(
+        monster = "If you are the GM, name which monster's facedown card you want to discard!"
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def discard_facedown(self, interaction: discord.Interaction, monster: str=None):
+        minordeck, majordeck = self.get_decks(interaction.channel)
+        if monster is None:
+            #the user running this command is a player
+            result = minordeck.discard_facedown(interaction.user.name)
+
+            if result[1] == "NOCARD":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to discard their facedown card, but they do not have one!",
+                    color=ERRORCOLOR
+                )
+                await interaction.response.send_message(embed=embed)
+            else:
+                #the discard was successful! show the card to everyone
+
+                desc = "It was a "
+                if result[0].is_reversed:
+                    desc += "**Reversed** *" + result[0].name + "*!"
+                else:
+                    desc += "*" + result[0].name + "*!"
+
+                img = discord.File(result[0].get_filepath(), filename=result[0].filename)
+                embed = discord.Embed(
+                    title="The adventurer " + self.get_nick(interaction.user) + " quietly discards their facedown card...",
+                    description=desc,
+                    color=PLAYERCOLOR,
+                )
+                embed.set_image(url="attachment://" + result[0].filename)
+
+                await interaction.response.send_message(file=img, embed=embed)
+        else:
+            #the usr running this command is the GM
+            result = majordeck.discard_facedown(monster)
+
+            if result[1] == "NOCARD":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to discard the facedown card of " + monster + ", but it does not have one!",
+                    color=ERRORCOLOR
+                )
+                await interaction.response.send_message(embed=embed)
+            else:
+                #the discard was successful! show the card to everyone
+
+                desc = "It was a "
+                if result[0].is_reversed:
+                    desc += "**Reversed** *" + result[0].name + "*!"
+                else:
+                    desc += "*" + result[0].name + "*!"
+
+                img = discord.File(result[0].get_filepath(), filename=result[0].filename)
+                embed = discord.Embed(
+                    title="The gamemaster " + self.get_nick(interaction.user) + " quietly discards the facedown card of " + monster + "...",
+                    description=desc,
+                    color=GMCOLOR,
+                )
+                embed.set_image(url="attachment://" + result[0].filename)
+
+                await interaction.response.send_message(file=img, embed=embed)
 
 
 
