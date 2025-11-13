@@ -148,6 +148,8 @@ class Card():
 
         self.is_main = True #whether the card was played as a main action or not. ONLY matters for facedown cards.
 
+        self.is_up = False #whether the card has been flipped and thus visible. ONLY matters for initiative cards.
+
     def short_print(self): #prints the card in a shorthand manner
         if self.suit == "major":
             return SHORTMAJOR[self.value]
@@ -395,6 +397,39 @@ class Deck():
             self.discardpile.append(card)
             return (card, "")
 
+
+    #here start the methods for initiative cards!  Kind of similar to Facedown cards, in most respects
+    def set_initiative(self, username, charname, val: int, suit: str):
+        #first, check if they already have an initiative card.
+        if charname in self.initiatives:
+            return ("", "HASFACEDOWN")
+
+        #then, check if they actually have the card they want to play as initiative
+        if not self.has_hand(username):
+            return ("","HANDEMPTY")
+
+        hand = self.hands[username]
+        cardindex = -1
+
+        found = False
+        for i in range(len(hand)):
+            if hand[i].value == val and hand[i].suit == suit:
+                found = True
+                cardindex = i
+                break
+
+        if not found:
+            return ("","NOCARD")
+
+        #if both of these are true, we can play the card as initiative. Remove it from the hand and set it as the adventurer's/monster's initiative. Change set is_up to False
+        card = hand.pop(cardindex)
+        card.is_up = False #initiative cards always begin unrevealed
+        self.initiatives[charname] = card
+
+        #since we got rid of a card, check for hand cleanup
+        self.cleanup_hand(username)
+
+        return (card, "")
 
 
 
@@ -789,11 +824,18 @@ class Tarot(commands.Cog, name="tarot"):
         desc += "\n\n**FACEDOWN CARDS:**"
 
         for char in minordeck.facedowns:
-                desc += "\n" + char + ": " + minordeck.facedowns[char].name + ", is_main: " + str(minordeck.facedowns[char].is_main)
+            desc += "\n" + char + ": " + minordeck.facedowns[char].name + ", is_main: " + str(minordeck.facedowns[char].is_main)
 
         for char in majordeck.facedowns:
-                desc += "\n" + char + ": " + majordeck.facedowns[char].name + ", is_main: " + str(majordeck.facedowns[char].is_main)
+            desc += "\n" + char + ": " + majordeck.facedowns[char].name + ", is_main: " + str(majordeck.facedowns[char].is_main)
 
+
+        desc += "\n\n**INITIATIVE CARDS:**"
+
+        for char in minordeck.initiatives:
+            desc += "\n" + char + ": " + minordeck.initiatives[char].name
+        for char in majordeck.initiatives:
+            desc += "\n" + char + ": " + majordeck.initiatives[char].name
 
         embed = discord.Embed(
             title = "Debug: Decks Status",
@@ -1582,6 +1624,78 @@ class Tarot(commands.Cog, name="tarot"):
                     color=GMCOLOR,
                 )
                 embed.set_image(url="attachment://" + result[0].filename)
+
+                await interaction.response.send_message(file=img, embed=embed)
+
+
+    #Initiative-related commands begin here!
+
+    @app_commands.command(
+        name="initiative",
+        description="Place a card facedown to serve as your initiative for this round!",
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    @app_commands.describe(
+        value="What is the number value of the card? Ace = 1, Page = 11, Knight = 12, Queen = 13, King = 14",
+    )
+    @app_commands.choices(
+        suit=[
+            app_commands.Choice(name="Wands",value="wands"),
+            app_commands.Choice(name="Pentacles",value="pentacles"),
+            app_commands.Choice(name="Cups",value="cups"),
+            app_commands.Choice(name="Swords",value="swords")
+        ]
+    )
+    async def initiative(self, interaction: discord.Interaction, value: int, suit: app_commands.Choice[str]):
+        minordeck, majordeck = self.get_decks(interaction.channel)
+        player = interaction.user.name
+
+        if value < 1 or value > 14:
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + " tried to set a card that does not exist for their initiative!",
+                description = "If you tried, remember that you can't use The Fool as your initiative. Why would you even want to?",
+                color=ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed)
+        else:
+            result = minordeck.set_initiative(player, player, value, suit.value)
+
+            #check if hand is empty or the card was not empty.
+            if result[1] == "HANDEMPTY":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to set down their initiative, but their hand is empty!",
+                    description = "Please be more careful, adventurer.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            elif result[1] == "NOCARD":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to set initiative with a card that they do not have!",
+                    description = "Please /peek at your hand to see what cards you *can* use, adventurer.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            elif result[1] == "HASFACEDOWN":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to set their initiative, but they have already done so this round!",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            else:
+                #the player was able to set their initiative
+
+                imagename = "cardbacks.png"
+
+                img = discord.File(IMGDIR + imagename,  filename=imagename)
+                embed = discord.Embed(
+                    title="The adventurer " + self.get_nick(interaction.user) + " sets down a card as their initiative!",
+                    description="Fast or slow? Reckless or cautious?",
+                    color=PLAYERCOLOR,
+                )
+                embed.set_image(url="attachment://" + imagename)
 
                 await interaction.response.send_message(file=img, embed=embed)
 
