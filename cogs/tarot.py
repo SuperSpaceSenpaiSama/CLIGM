@@ -267,15 +267,13 @@ class Deck():
 
     def play_card(self, val, suit, username):
 
-        if username not in self.hands:
+        if not self.has_hand(username):
             return ("","HANDEMPTY")
-        hand = self.hands[username]
 
+        hand = self.hands[username]
         #first, we need to check if the card is in this player's hand
         cardindex = -1
 
-        if len(hand) == 0:
-            return ("", "HANDEMPTY")
         found = False
         for i in range(len(hand)):
             if hand[i].value == val and hand[i].suit == suit:
@@ -294,12 +292,7 @@ class Deck():
 
     def has_fool(self, username):
         #checks if a player has The Fool. used to check for the /play_fool command without causing any irreversible changes first.
-        if username not in self.hands:
-            return "HANDEMPTY"
-
-        hand = self.hands[username]
-
-        if len(hand) == 0:
+        if not self.has_hand(username):
             return "HANDEMPTY"
 
         msg = "NO"
@@ -309,6 +302,14 @@ class Deck():
                 break
         return msg
 
+    def has_hand(self, username):
+        #checks if the player has a hand or not.
+        if username not in self.hands:
+            return False
+        elif len(self.hands[username]) == 0:
+            return False
+        else:
+            return True
 
 
 
@@ -355,7 +356,7 @@ class Tarot(commands.Cog, name="tarot"):
         # for now, just returns the two deck attributes, This will be useful once the bot is built to handle multiple decks per channel
         return (self.player_deck, self.gm_deck)
 
-    async def show_hand(self, context: Context, deck: Deck, player: str, prefix: str):
+    async def show_hand(self, interaction: discord.Interaction, deck: Deck, player: str, prefix: str):
         desc = ""
         imagefiles = []
         rev = ""
@@ -377,13 +378,13 @@ class Tarot(commands.Cog, name="tarot"):
         img = discord.File(IMGDIR + MERGEDIMG, filename=MERGEDIMG)
 
         embed3 = discord.Embed(
-            title = "You have drawn the following cards, " + self.get_nick(context.author) + ". Use them wisely!",
+            title = "You have drawn the following cards, " + self.get_nick(interaction.user) + ". Use them wisely!",
             description = desc,
             color = INVISCOLOR,
         )
         embed3.set_image(url="attachment://" + MERGEDIMG)
 
-        await context.interaction.followup.send(embed=embed3, ephemeral = True, file=img)
+        await interaction.followup.send(embed=embed3, ephemeral = True, file=img)
 
     @commands.hybrid_command(
         name="clihello",
@@ -441,6 +442,51 @@ class Tarot(commands.Cog, name="tarot"):
 
             await context.send(file=img, embed=embed)
 
+
+    @app_commands.command(
+        name="draw_hidden_minor",
+        description="Draw a card from the player deck without showing it to anyone else.",
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def draw_hidden_minor(self, interaction: discord.Interaction) -> None:
+        minordeck, majordeck = self.get_decks(interaction.channel)
+        result = minordeck.draw()
+
+        if result[1] == "NOCARD":
+            embed = discord.Embed(
+                title = "The draw pile is empty, gamemaster! You need to shuffle this deck!",
+                color=ERRORCOLOR,
+            )
+            await interaction.respond.send_message(embed=embed)
+        else:
+            embed2 = discord.Embed(
+                title = "The gamemaster " + self.get_nick(interaction.user) + " quietly draws a card without showing it to anyone...",
+                description="Who knows what it means?...",
+                color=GMCOLOR
+            )
+            await interaction.channel.send(embed=embed2)
+
+
+            desc = "You have drawn the "
+            if result[0].is_reversed:
+                desc += "**Reversed** *" + result[0].name + "*!"
+            else:
+                desc += "*" + result[0].name + "*!"
+
+            if result[1] == "LASTCARD":
+                desc = desc + "\nThis was the last card in the draw pile!"
+            elif result[1] == "FOOL":
+                desc = desc + "\nThe Fool demands that you shuffle your decks!"
+
+            img = discord.File(result[0].get_filepath(), filename=result[0].filename)
+            embed = discord.Embed(
+                title="You surreptitiously draw a card without showing it...",
+                description=desc,
+                color=GMCOLOR,
+            )
+            embed.set_image(url="attachment://" + result[0].filename)
+
+            await interaction.response.send_message(file=img, embed=embed, ephemeral=True)
 
 
     @commands.hybrid_command(
@@ -671,28 +717,38 @@ class Tarot(commands.Cog, name="tarot"):
 
     #Here begins the commands for Challenge Phase play!
 
-    @commands.hybrid_command(
+    @app_commands.command(
         name="deal_minor",
         description="Draw 4 cards from the Players' deck, and then hold them in your hand."
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
-    async def deal_minor(self, context: Context) -> None:
-        minordeck, majordeck = self.get_decks(context.channel)
+    async def deal_minor(self, interaction: discord.Interaction) -> None:
+        minordeck, majordeck = self.get_decks(interaction.channel)
 
-        player = context.author.name
+        player = interaction.user.name
+
+        if majordeck.has_hand(player):
+            #if this user already has a Major Arcana hand, they shouldn't be dealing minoor arcana to themselves!!'
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + ", you already have Major Arcana cards in your hand! Don't mix and match!",
+                description = "If you're the GM, use /draw_major instead! If you're a player, please flush your Major Arcana cards.",
+                color=ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=False)
+            return None
 
         output = minordeck.deal_cards(4, player) #deal hand to the player. use the player's unique username (instead of their mutable & non-unique Display Name) as the key
 
-        await context.interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
 
         if output[0] == "NOHAND":
             embed = discord.Embed(
-                title = self.get_nick(context.author) + " tried to draw, but all Player cards are in someone's hand!!!",
+                title = self.get_nick(interaction.user) + " tried to draw, but all Player cards are in someone's hand!!!",
                 description = "How did you even manage this? Please use the end-of-round command to reset the Player's deck.",
                 color=ERRORCOLOR
             )
 
-            await context.send(embed=embed)
+            await interaction.response.send_message(embed=embed, ephemeral=False)
         else:
             if output[0] == "SHUFFLED":
                 embed = discord.Embed(
@@ -701,19 +757,19 @@ class Tarot(commands.Cog, name="tarot"):
                     color=PLAYERCOLOR
                 )
 
-                await context.channel.send(embed=embed)
+                await interaction.channel.send(embed=embed)
 
             embed2 = discord.Embed(
-                title = "The adventurer " + self.get_nick(context.author) + " deals 4 cards into their hand!",
+                title = "The adventurer " + self.get_nick(interaction.user) + " deals 4 cards into their hand!",
                 description="What sort of strategems lie hidden between your fingers...?",
                 color=PLAYERCOLOR
             )
-            await context.channel.send(embed=embed2)
+            await interaction.channel.send(embed=embed2)
 
 
-            await self.show_hand(context, minordeck, player, "The ")
+            await self.show_hand(interaction, minordeck, player, "The ")
 
-    @commands.hybrid_command(
+    @app_commands.command(
         name="deal_major",
         description="Draw cards from the GM's deck, and then hold them in your hand."
     )
@@ -721,23 +777,33 @@ class Tarot(commands.Cog, name="tarot"):
     @app_commands.describe(
         cardcount="How many cards are you drawing?"
     )
-    async def deal_major(self, context: Context, cardcount: int) -> None:
-        minordeck, majordeck = self.get_decks(context.channel)
+    async def deal_major(self, interaction: discord.Interaction, cardcount: int) -> None:
+        minordeck, majordeck = self.get_decks(interaction.channel)
 
-        player = context.author.name
+        player = interaction.user.name
+
+        if minordeck.has_hand(player):
+            #if this user already has a Minor Arcana hand, they shouldn't be dealing major arcana to themselves!!'
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + ", you already have Minor Arcana cards in your hand! Don't mix and match!",
+                description = "If you're a player, use /draw_minor instead! If you're the GM, please flush your Minor Arcana cards.",
+                color=ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=False)
+            return None
 
         output = majordeck.deal_cards(cardcount, player) #deal hand to the player. use the player's unique username (instead of their mutable & non-unique Display Name) as the key
 
-        await context.interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
 
         if output[0] == "NOHAND":
             embed = discord.Embed(
-                title = self.get_nick(context.author) + " tried to draw, but all GM cards are in someone's hand!!!",
+                title = self.get_nick(interaction.user) + " tried to draw, but all GM cards are in someone's hand!!!",
                 description = "How did you even manage this? Please use the end-of-round command to reset the GM's deck.",
                 color=ERRORCOLOR
             )
 
-            await context.send(embed=embed)
+            await interaction.response.send_message(embed=embed, ephemeral=False)
         else:
             if output[0] == "SHUFFLED":
                 embed = discord.Embed(
@@ -746,16 +812,54 @@ class Tarot(commands.Cog, name="tarot"):
                     color=GMCOLOR
                 )
 
-                await context.channel.send(embed=embed)
+                await interaction.channel.send(embed=embed)
 
             embed2 = discord.Embed(
-                title = "The gamemaster " + self.get_nick(context.author) + " deals " + str(cardcount) + " cards into their hand!",
+                title = "The gamemaster " + self.get_nick(interaction.user) + " deals " + str(cardcount) + " cards into their hand!",
                 description="What sorts of doom does The Dungeon have in store now...?",
                 color=GMCOLOR
             )
-            await context.channel.send(embed=embed2)
+            await interaction.channel.send(embed=embed2)
 
-            await self.show_hand(context, majordeck, player, "")
+            await self.show_hand(interaction, majordeck, player, "")
+
+    @app_commands.command(
+        name="peek",
+        description="Peek at your current hand!"
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def peek(self, interaction: discord.Interaction):
+        minordeck, majordeck = self.get_decks(interaction.channel)
+        player = interaction.user.name
+
+        has_min = minordeck.has_hand(player)
+        has_maj = majordeck.has_hand(player)
+
+        await interaction.response.defer(ephemeral=True)
+
+
+        if has_min and has_maj:
+            embed3 = discord.Embed(
+                title = "You have cards from both the Minor and Major decks in your hand!",
+                description = "This should not happen! Please let the GM know.",
+                color = ERRORCOLOR,
+            )
+
+            await interaction.followup.send(embed=embed3, ephemeral = False)
+        elif has_min:
+            await self.show_hand(interaction, minordeck, player, "The ")
+        elif has_maj:
+            await self.show_hand(interaction, majordeck, player, "")
+        else:
+            embed = discord.Embed(
+                title = "Your hand is empty, friend!",
+                description = "Draw some cards to peek at them.",
+                color=ERRORCOLOR
+            )
+
+            await interaction.followup.send(embed=embed)
+
+
 
     @app_commands.command(
         name="play_minor",
