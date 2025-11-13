@@ -1700,6 +1700,70 @@ class Tarot(commands.Cog, name="tarot"):
                 await interaction.response.send_message(file=img, embed=embed)
 
 
+    @app_commands.command(
+        name="monster_initiative",
+        description="Set the initiative for a specific monster!",
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    @app_commands.describe(
+        value="What is the number value of the card? Ace = 1, Page = 11, Knight = 12, Queen = 13, King = 14",
+        monster="The name of the monster playing this card. Please give each monster a unique name!"
+    )
+    async def monster_initiative(self, interaction: discord.Interaction, monster: str, value: int):
+        minordeck, majordeck = self.get_decks(interaction.channel)
+        player = interaction.user.name
+
+        if value < 1 or value > 21:
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + " tried to set initiative with a card that does not exist!",
+                description = "Please be more careul, gamemaster!",
+                color=ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed)
+        else:
+            result = majordeck.set_initiative(player, monster, value, "major")
+
+            #check if hand is empty or the card was not empty.
+            if result[1] == "HANDEMPTY":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to set initiative, but their hand is empty!",
+                    description = "Please be more careful, gamemaster.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            elif result[1] == "NOCARD":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to set initiative with a card that they do not have!",
+                    description = "Please /peek at your hand to see what cards you *can* set down, gamemaster.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            elif result[1] == "HASFACEDOWN":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to set the initiative of " + monster + ", but it already has an initiative card!",
+                    description = "Please wait until end of round.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            else:
+                #the player was able to place the facedown card!
+
+                imagename = "cardbacks.png"
+
+                img = discord.File(IMGDIR + imagename,  filename=imagename)
+                embed = discord.Embed(
+                    title="The gamemaster " + self.get_nick(interaction.user) + " sets down an initiative card for " + monster + "!",
+                    description="Fast or slow? Reckless or cautious?",
+                    color=GMCOLOR,
+                )
+                embed.set_image(url="attachment://" + imagename)
+
+                await interaction.response.send_message(file=img, embed=embed)
+
+
 
 # And then we finally add the cog to the bot so that it can load, unload, reload and use it's content.
 async def setup(bot) -> None:
