@@ -146,6 +146,8 @@ class Card():
         self.is_reversed = False #whether the card is reversed or not. doesn't really affect rules'
         self.filename = self.suit + str(self.value).zfill(2) + ".png" #The filename to the card's corresponding picture
 
+        self.is_main = True #whether the card was played as a main action or not. ONLY matters for facedown cards.
+
     def short_print(self): #prints the card in a shorthand manner
         if self.suit == "major":
             return SHORTMAJOR[self.value]
@@ -188,6 +190,8 @@ class Deck():
         self.drawpile = []
         self.discardpile = []
         self.hands = {}
+        self.facedowns = {} # a dict for the facedown cards of monsters/adventurers
+        self.initiatives = {} # a dict for the initiative cards of monsters/adventurers
 
         if major: # major is true,  this is the GM's deck. All Major arcana save for fool
             for i in range(1,22):
@@ -345,6 +349,44 @@ class Deck():
         #get rid of empty hands  to save on space
         if len(self.hands[username]) == 0:
             del self.hands[username]
+
+
+    #here start the methods for facedown cards!
+    #facedown cards are keyed by the username for adventurers, and by the inputed monster name for GM monsters
+    #username is used for the GM, primarily
+    def play_facedown(self, username, charname, val: int, suit: str, main: bool):
+        #first, check if they already have a facedown card.
+        if charname in self.facedowns:
+            return ("", "HASFACEDOWN")
+
+        #then, check if they actually have the card they want to play facedown
+        if not self.has_hand(username):
+            return ("","HANDEMPTY")
+
+        hand = self.hands[username]
+        cardindex = -1
+
+        found = False
+        for i in range(len(hand)):
+            if hand[i].value == val and hand[i].suit == suit:
+                found = True
+                cardindex = i
+                break
+
+        if not found:
+            return ("","NOCARD")
+
+        #if both of these are true, we can play the card facedown. Remove it from the hand and set it as the adventurer's/monster's facedown. Change its main status if needed
+        card = hand.pop(cardindex)
+        card.is_main = main
+        self.facedowns[charname] = card
+
+        #since we got rid of a card, check for hand cleanup
+        self.cleanup_hand(username)
+
+        return (card, "")
+
+
 
 
 
@@ -735,6 +777,15 @@ class Tarot(commands.Cog, name="tarot"):
             for card in majordeck.hands[player]:
                 desc += "\n  - " + card.name
 
+        desc += "\n\n**FACEDOWN CARDS:**"
+
+        for char in minordeck.facedowns:
+                desc += "\n" + char + ": " + minordeck.facedowns[char].name + ", is_main: " + str(minordeck.facedowns[char].is_main)
+
+        for char in majordeck.facedowns:
+                desc += "\n" + char + ": " + majordeck.facedowns[char].name + ", is_main: " + str(majordeck.facedowns[char].is_main)
+
+
         embed = discord.Embed(
             title = "Debug: Decks Status",
             description = desc,
@@ -1019,7 +1070,7 @@ class Tarot(commands.Cog, name="tarot"):
                 color=ERRORCOLOR
             )
             await interaction.response.send_message(embed=embed)
-        else :
+        else:
             result = minordeck.play_card(value, suit.value, interaction.user.name) # run the play method
 
             #check if hand is empty or the card was not empty.
@@ -1084,7 +1135,7 @@ class Tarot(commands.Cog, name="tarot"):
                 color=ERRORCOLOR
             )
             await interaction.response.send_message(embed=embed)
-        else :
+        else:
             #first, check if the player has the fool
             hasfool = minordeck.has_fool(interaction.user.name)
             if hasfool == "HANDEMPTY":
@@ -1229,6 +1280,88 @@ class Tarot(commands.Cog, name="tarot"):
 
         await context.send(embed=embed, file=img)
 
+
+    #here begin the facedown card commands
+
+    @app_commands.command(
+        name="facedown_minor",
+        description="Play a card facedown for your adventurer, to spring later!",
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    @app_commands.describe(
+        value="What is the number value of the card? Ace = 1, Page = 11, Knight = 12, Queen = 13, King = 14",
+        action_type="Are you playing this as a Main action during your turn, or a Minor action outside of your turn?",
+    )
+    @app_commands.choices(
+        suit=[
+            app_commands.Choice(name="Wands",value="wands"),
+            app_commands.Choice(name="Pentacles",value="pentacles"),
+            app_commands.Choice(name="Cups",value="cups"),
+            app_commands.Choice(name="Swords",value="swords")
+        ],
+        action_type=[
+            app_commands.Choice(name="Main",value=1),
+            app_commands.Choice(name="Minor",value=0)
+        ]
+    )
+    async def facedown_minor(self, interaction: discord.Interaction, value: int, suit: app_commands.Choice[str], action_type: app_commands.Choice[int]):
+        minordeck, majordeck = self.get_decks(interaction.channel)
+        player = interaction.user.name
+
+        if value < 1 or value > 14:
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + " tried to play a card that does not exist!",
+                description = "Please check your input, adventurer :P",
+                color=ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed)
+        else:
+            result = minordeck.play_facedown(player, player, value, suit.value, action_type.value)
+
+            #check if hand is empty or the card was not empty.
+            if result[1] == "HANDEMPTY":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to play a card, but their hand is empty!",
+                    description = "Please be more careful, adventurer.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            elif result[1] == "NOCARD":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to play a card that they do not have!",
+                    description = "Please /peek at your hand to see what cards you *can* play, adventurer.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            elif result[1] == "HASFACEDOWN":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to place a card facedown, but they already have another facedown card!",
+                    description = "Please /discard_facedown your previous card if you want to make a new facedown action, adventurer.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            else:
+                #the player was able to place the facedownc ard!
+
+                imagename = ""
+                if action_type.value: # if it is a main action, use the upright cardbacks
+                    imagename = "cardbacks.png"
+                else:
+                    #if it is a minor action, use sideways cardbacks
+                    imagename = "sidewaysbacks.png"
+
+                img = discord.File(IMGDIR + imagename,  filename=imagename)
+                embed = discord.Embed(
+                    title="The adventurer " + self.get_nick(interaction.user) + " places a card facedown as a *" + action_type.name + "* Action!",
+                    description="Who knows how powerful it is...?",
+                    color=PLAYERCOLOR,
+                )
+                embed.set_image(url="attachment://" + imagename)
+
+                await interaction.response.send_message(file=img, embed=embed)
 
 
 
