@@ -265,6 +265,21 @@ class Deck():
 
         return (msg, cnt)
 
+    def seek(self, username, value, suit):
+        #tries to find a specific card in the discard pile and draw it into username's hand
+        if username not in self.hands:
+            self.hands[username] = []
+
+        for i in range(len(self.discardpile)):
+            if self.discardpile[i].value == value and self.discardpile[i].suit == suit:
+                card = self.discardpile.pop(i)
+                self.hands[username].append(card)
+
+                return (card, "")
+        # if the card wasn't in the discard pile...
+        return ("", "NOCARD")
+
+
     def play_card(self, val, suit, username):
 
         if not self.has_hand(username):
@@ -310,6 +325,7 @@ class Deck():
             return False
         else:
             return True
+
 
 
 
@@ -822,6 +838,110 @@ class Tarot(commands.Cog, name="tarot"):
             await interaction.channel.send(embed=embed2)
 
             await self.show_hand(interaction, majordeck, player, "")
+
+    @app_commands.command(
+            name="specific_deal",
+            description="get a specific card back in your hand. use ONLY to undo mistakes!"
+    )
+    @app_commands.describe(
+        value="What is the number value of the card? Ace = 1, Page = 11, Knight = 12, Queen = 13, King = 14"
+    )
+    @app_commands.choices(suit=[
+        app_commands.Choice(name="Wands",value="wands"),
+        app_commands.Choice(name="Pentacles",value="pentacles"),
+        app_commands.Choice(name="Cups",value="cups"),
+        app_commands.Choice(name="Swords",value="swords"),
+        app_commands.Choice(name="Major Arcana",value="major"),
+    ])
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def specific_deal(self, interaction: discord.Interaction, value: int, suit: app_commands.Choice[str]):
+        minordeck, majordeck = self.get_decks(interaction.channel)
+        player = interaction.user.name
+
+        #first, which deck is the card being drawn from?
+        is_major = False
+        if suit.value == "major" and value <= 21 and value >= 1:
+            is_major = True
+        elif suit.value == "major" and value == 0:
+            #the Fool counts as a minor card for this game
+            is_major = False
+        elif suit.value != "major" and value <= 14 and value >= 1:
+            is_major = False
+        else:
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + " searched the discard piles for a card that does not exist!",
+                description = "Please check your input, friend :P",
+                color=ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed)
+            return None
+
+        #now we know for a fact the player is drawing a valid card. Check to see if they're trying to mix decks
+        if is_major and minordeck.has_hand(player):
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + ", you already have Minor Arcana cards in your hand! Don't mix and match!",
+                description = "If you're the GM, please flush your Minor Arcana cards.",
+                color=ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed)
+            return None
+        if not is_major and majordeck.has_hand(player):
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + ", you already have Major Arcana cards in your hand! Don't mix and match!",
+                description = "If you're a player, please flush your Major Arcana cards.",
+                color=ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed)
+            return None
+
+        #the player is trying to draw a real card, and it does not conflict with their hand state. let's try to see if the card is in a discard pile!
+        result = ""
+        if is_major:
+            result = majordeck.seek(player, value, suit.value)
+        else:
+            result = minordeck.seek(player, value, suit.value)
+
+        #check if a card was found or not
+        if result[1] == "NOCARD":
+            t = self.get_nick(interaction.user) + " searched the discard pile for *"
+            if suit.value == "major":
+                if value == 0:
+                    t += "The "
+                t += MAJORNAME[value]
+            else:
+                t += "The " + VALUENAME[value] + suit.name
+            t+= "*, but it was not there!"
+
+            embed = discord.Embed(
+                title = t,
+                description = "Wherever it is, you probably shouldn't be taking that card...'",
+                color=ERRORCOLOR
+            )
+
+            await interaction.response.send_message(embed=embed)
+            return None
+        else:
+            # the card was found!
+            colr = 0
+            if is_major:
+                colr = GMCOLOR
+                prefix = ""
+            else:
+                colr = PLAYERCOLOR
+                prefix = "The "
+
+            img = discord.File(result[0].get_filepath(), filename=result[0].filename)
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + " searches the discard pile for *" + prefix + result[0].name +"*...",
+                description = "... and puts it in their hand! It's okay, we all make mistakes.'",
+                color = colr,
+            )
+            embed.set_image(url="attachment://" + result[0].filename)
+
+            await interaction.response.send_message(file=img, embed=embed)
+
+
+
 
     @app_commands.command(
         name="peek",
