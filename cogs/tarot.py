@@ -12,6 +12,7 @@ from discord.ext.commands import Context
 import os, random
 import math
 from PIL import Image
+from typing import List
 
 SHORTMAJOR = [
     "0-Fool",
@@ -264,6 +265,32 @@ class Deck():
 
         return (msg, cnt)
 
+    def play_card(self, val, suit, username):
+
+        if username not in self.hands:
+            return ("","HANDEMPTY")
+        hand = self.hands[username]
+
+        #first, we need to check if the card is in this player's hand
+        cardindex = -1
+
+        if len(hand) == 0:
+            return ("", "HANDEMPTY")
+        found = False
+        for i in range(len(hand)):
+            if hand[i].value == val and hand[i].suit == suit:
+                found = True
+                cardindex = i
+                break
+
+        if not found:
+            return ("","NOCARD")
+
+        #now that we know the card is in the player's hand, return it to the discard pile and then return it!
+        played = hand.pop(cardindex)
+        self.discardpile.append(played)
+
+        return (played, "")
 
 
 
@@ -295,17 +322,17 @@ class Tarot(commands.Cog, name="tarot"):
         self.player_deck = Deck(major=False)
 
     # Here you can just add your own commands, you'll always need to provide "self" as first parameter.
-    def get_nick(self, context):
+    def get_nick(self, user):
         nickname = ""
-        if context.author.nick is not None:
-            nickname = context.author.nick
-        elif context.author.display_name is not None:
-            nickname = context.author.display_name
+        if user.nick is not None:
+            nickname = user.nick
+        elif user.display_name is not None:
+            nickname = user.display_name
         else:
-            nickname = context.author.name
+            nickname = user.name
         return nickname
 
-    def get_decks(self, context):
+    def get_decks(self, channel):
         # for now, just returns the two deck attributes, This will be useful once the bot is built to handle multiple decks per channel
         return (self.player_deck, self.gm_deck)
 
@@ -331,7 +358,7 @@ class Tarot(commands.Cog, name="tarot"):
         img = discord.File(IMGDIR + MERGEDIMG, filename=MERGEDIMG)
 
         embed3 = discord.Embed(
-            title = "You have drawn the following cards, " + self.get_nick(context) + ". Use them wisely!",
+            title = "You have drawn the following cards, " + self.get_nick(context.author) + ". Use them wisely!",
             description = desc,
             color = INVISCOLOR,
         )
@@ -363,7 +390,7 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def draw_minor(self, context: Context) -> None:
-        minordeck, majordeck = self.get_decks(context)
+        minordeck, majordeck = self.get_decks(context.channel)
         result = minordeck.draw()
 
         if result[1] == "NOCARD":
@@ -387,7 +414,7 @@ class Tarot(commands.Cog, name="tarot"):
 
             img = discord.File(result[0].get_filepath(), filename=result[0].filename)
             embed = discord.Embed(
-                title="The adventurer " + self.get_nick(context) + " tests Fate...",
+                title="The adventurer " + self.get_nick(context.author) + " tests Fate...",
                 description=desc,
                 color=PLAYERCOLOR,
             )
@@ -403,7 +430,7 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def draw_major(self, context: Context) -> None:
-        minordeck, majordeck = self.get_decks(context)
+        minordeck, majordeck = self.get_decks(context.channel)
         result = majordeck.draw()
 
         if result[1] == "NOCARD":
@@ -425,7 +452,7 @@ class Tarot(commands.Cog, name="tarot"):
 
             img = discord.File(result[0].get_filepath(), filename=result[0].filename)
             embed = discord.Embed(
-                title="The gamemaster " + self.get_nick(context)+ " draws a card...",
+                title="The gamemaster " + self.get_nick(context.author)+ " draws a card...",
                 description=desc,
                 color=GMCOLOR,
             )
@@ -441,7 +468,7 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def show_discard(self, context: Context) -> None:
-        minordeck, majordeck = self.get_decks(context)
+        minordeck, majordeck = self.get_decks(context.channel)
         topcard = minordeck.show_discard()
 
         if topcard[1] == "NOCARD":
@@ -459,7 +486,7 @@ class Tarot(commands.Cog, name="tarot"):
 
             img = discord.File(topcard[0].get_filepath(), filename=topcard[0].filename)
             embed = discord.Embed(
-                title= self.get_nick(context) + " peeks at the top of the discard pile...",
+                title= self.get_nick(context.author) + " peeks at the top of the discard pile...",
                 description=desc,
                 color=NEUTRALCOLOR,
             )
@@ -475,7 +502,7 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def show_discard_major(self, context: Context) -> None:
-        minordeck, majordeck = self.get_decks(context)
+        minordeck, majordeck = self.get_decks(context.channel)
         topcard = majordeck.show_discard()
 
         if topcard[1] == "NOCARD":
@@ -493,7 +520,7 @@ class Tarot(commands.Cog, name="tarot"):
 
             img = discord.File(topcard[0].get_filepath(), filename=topcard[0].filename)
             embed = discord.Embed(
-                title= self.get_nick(context) + " peeks at the top of the discard pile...",
+                title= self.get_nick(context.author) + " peeks at the top of the discard pile...",
                 description=desc,
                 color=NEUTRALCOLOR,
             )
@@ -510,12 +537,12 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def shuffle_minor(self, context: Context) -> None:
-        minordeck, majordeck = self.get_decks(context)
+        minordeck, majordeck = self.get_decks(context.channel)
         minordeck.shuffle()
 
         img = discord.File(IMGDIR + "cardbacks.png", filename="cardbacks.png")
         embed = discord.Embed(
-            title= self.get_nick(context) + " shuffles the Players' deck...",
+            title= self.get_nick(context.author) + " shuffles the Players' deck...",
             description = "Now you can draw again, and test your fate...",
             color=PLAYERCOLOR,
         )
@@ -531,12 +558,12 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def shuffle_major(self, context: Context) -> None:
-        minordeck, majordeck = self.get_decks(context)
+        minordeck, majordeck = self.get_decks(context.channel)
         majordeck.shuffle()
 
         img = discord.File(IMGDIR + "cardbacks.png", filename="cardbacks.png")
         embed = discord.Embed(
-            title= self.get_nick(context) + " shuffles the GM's deck...",
+            title= self.get_nick(context.author) + " shuffles the GM's deck...",
             description = "Now you can draw again, and herald disaster...",
             color=GMCOLOR,
         )
@@ -552,13 +579,13 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def shuffle_both(self, context: Context) -> None:
-        minordeck, majordeck = self.get_decks(context)
+        minordeck, majordeck = self.get_decks(context.channel)
         minordeck.shuffle()
         majordeck.shuffle()
 
         img = discord.File(IMGDIR + "cardbacks.png", filename="cardbacks.png")
         embed = discord.Embed(
-            title= self.get_nick(context) + " shuffles both decks...",
+            title= self.get_nick(context.author) + " shuffles both decks...",
             description = "Now you can draw again, and weave our tale...",
             color=NEUTRALCOLOR,
         )
@@ -575,7 +602,7 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def debug(self, context: Context) -> None:
-        minordeck, majordeck = self.get_decks(context)
+        minordeck, majordeck = self.get_decks(context.channel)
 
         desc = "**PLAYER DRAWPILE:**"
 
@@ -626,12 +653,12 @@ class Tarot(commands.Cog, name="tarot"):
     #Here begins the commands for Challenge Phase play!
 
     @commands.hybrid_command(
-        name="deal_player",
+        name="deal_minor",
         description="Draw 4 cards from the Players' deck, and then hold them in your hand."
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
-    async def deal_player(self, context: Context) -> None:
-        minordeck, majordeck = self.get_decks(context)
+    async def deal_minor(self, context: Context) -> None:
+        minordeck, majordeck = self.get_decks(context.channel)
 
         player = context.author.name
 
@@ -641,7 +668,7 @@ class Tarot(commands.Cog, name="tarot"):
 
         if output[0] == "NOHAND":
             embed = discord.Embed(
-                title = "All cards are in someone's hand!!!",
+                title = self.get_nick(context.author) + " tried to draw, but all Player cards are in someone's hand!!!",
                 description = "How did you even manage this? Please use the end-of-round command to reset the Player's deck.",
                 color=ERRORCOLOR
             )
@@ -658,7 +685,7 @@ class Tarot(commands.Cog, name="tarot"):
                 await context.channel.send(embed=embed)
 
             embed2 = discord.Embed(
-                title = "The Adventurer " + self.get_nick(context) + " deals 4 cards into their hand!",
+                title = "The adventurer " + self.get_nick(context.author) + " deals 4 cards into their hand!",
                 description="What sort of strategems lie hidden between your fingers...?",
                 color=PLAYERCOLOR
             )
@@ -668,15 +695,15 @@ class Tarot(commands.Cog, name="tarot"):
             await self.show_hand(context, minordeck, player, "The ")
 
     @commands.hybrid_command(
-        name="deal_gm",
+        name="deal_major",
         description="Draw cards from the GM's deck, and then hold them in your hand."
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     @app_commands.describe(
         cardcount="How many cards are you drawing?"
     )
-    async def deal_gm(self, context: Context, cardcount: int) -> None:
-        minordeck, majordeck = self.get_decks(context)
+    async def deal_major(self, context: Context, cardcount: int) -> None:
+        minordeck, majordeck = self.get_decks(context.channel)
 
         player = context.author.name
 
@@ -686,8 +713,8 @@ class Tarot(commands.Cog, name="tarot"):
 
         if output[0] == "NOHAND":
             embed = discord.Embed(
-                title = "All cards are in someone's hand!!!",
-                description = "How did you even manage this? Please use the end-of-round command to reset the Player's deck.",
+                title = self.get_nick(context.author) + " tried to draw, but all GM cards are in someone's hand!!!",
+                description = "How did you even manage this? Please use the end-of-round command to reset the GM's deck.",
                 color=ERRORCOLOR
             )
 
@@ -703,7 +730,7 @@ class Tarot(commands.Cog, name="tarot"):
                 await context.channel.send(embed=embed)
 
             embed2 = discord.Embed(
-                title = "The Gamemaster " + self.get_nick(context) + " deals " + str(cardcount) + " cards into their hand!",
+                title = "The gamemaster " + self.get_nick(context.author) + " deals " + str(cardcount) + " cards into their hand!",
                 description="What sorts of doom does The Dungeon have in store now...?",
                 color=GMCOLOR
             )
@@ -711,6 +738,126 @@ class Tarot(commands.Cog, name="tarot"):
 
             await self.show_hand(context, majordeck, player, "")
 
+    @app_commands.command(
+        name="play_minor",
+        description="Play a Minor Arcana card in your hand, showing it to everyone and then discarding it."
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    @app_commands.describe(
+        value="What is the number value of the card? Ace = 1, Page = 11, Knight = 12, Queen = 13, King = 14"
+    )
+    @app_commands.choices(suit=[
+        app_commands.Choice(name="Wands",value="wands"),
+        app_commands.Choice(name="Pentacles",value="pentacles"),
+        app_commands.Choice(name="Cups",value="cups"),
+        app_commands.Choice(name="Swords",value="swords")
+    ])
+    async def play_minor(self, interaction: discord.Interaction, value: int, suit: app_commands.Choice[str]):
+        minordeck, majordeck = self.get_decks(interaction.channel)
+
+        if value < 1 or value > 14:
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + " tried to play a card that does not exist!",
+                description = "Please check your input, adventurer :P",
+                color=ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed)
+        else :
+            result = minordeck.play_card(value, suit.value, interaction.user.name) # run the play method
+
+            #check if hand is empty or the card was not empty.
+            if result[1] == "HANDEMPTY":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to play a card, but their hand is empty!",
+                    description = "Please be more careful, adventurer.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            elif result[1] == "NOCARD":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to play a card that they do not have!",
+                    description = "Please /peek at your hand to see what cards you *can* play, adventurer.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            else:
+                #the player was able to play a card!
+
+                desc = "You have played the "
+                if result[0].is_reversed:
+                    desc += "**Reversed** *" + result[0].name + "*!"
+                else:
+                    desc += "*" + result[0].name + "*!"
+
+                img = discord.File(result[0].get_filepath(), filename=result[0].filename)
+                embed = discord.Embed(
+                    title="The adventurer " + self.get_nick(interaction.user) + " plays a card!",
+                    description=desc,
+                    color=PLAYERCOLOR,
+                )
+                embed.set_image(url="attachment://" + result[0].filename)
+
+                await interaction.response.send_message(file=img, embed=embed)
+
+
+    @app_commands.command(
+        name="play_major",
+        description="Play a Major Arcana card in your hand, showing it to everyone and then discarding it."
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    @app_commands.describe(
+        value="What is the number value of the card?"
+    )
+    async def play_major(self, interaction: discord.Interaction, value: int):
+        minordeck, majordeck = self.get_decks(interaction.channel)
+
+        if value < 1 or value > 21:
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + " tried to play a card that does not exist!",
+                description = "Please check your input, gamemaster!",
+                color=ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed)
+        else :
+            result = majordeck.play_card(value, "major", interaction.user.name) # run the play method
+
+            #check if hand is empty or the card was not empty.
+            if result[1] == "HANDEMPTY":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to play a card, but their hand is empty!",
+                    description = "Please be more careful, gamemaster.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            elif result[1] == "NOCARD":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to play a card that they do not have!",
+                    description = "Please /peek at your hand to see what cards you *can* play, gamemaster.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            else:
+                #the player was able to play a card!
+
+                desc = "You have played the "
+                if result[0].is_reversed:
+                    desc += "**Reversed** *" + result[0].name + "*!"
+                else:
+                    desc += "*" + result[0].name + "*!"
+
+                img = discord.File(result[0].get_filepath(), filename=result[0].filename)
+                embed = discord.Embed(
+                    title="The gamemaster " + self.get_nick(interaction.user) + " plays a card!",
+                    description=desc,
+                    color=PLAYERCOLOR,
+                )
+                embed.set_image(url="attachment://" + result[0].filename)
+
+                await interaction.response.send_message(file=img, embed=embed)
 
 
 
