@@ -303,6 +303,8 @@ class Deck():
         played = hand.pop(cardindex)
         self.discardpile.append(played)
 
+        self.cleanup_hand(username)
+
         return (played, "")
 
     def has_fool(self, username):
@@ -326,11 +328,23 @@ class Deck():
         else:
             return True
 
+    def flush(self, username):
+        #flushes every card in a player's hand into the discard pile.
+        discardlist = []
+        if username in self.hands:
+            hand = self.hands[username]
+            while len(hand) != 0:
+                card = hand.pop()
+                discardlist.append(card)
+                self.discardpile.append(card)
 
+        self.cleanup_hand(username)
+        return discardlist
 
-
-
-
+    def cleanup_hand(self, username):
+        #get rid of empty hands  to save on space
+        if len(self.hands[username]) == 0:
+            del self.hands[username]
 
 
 
@@ -1185,6 +1199,39 @@ class Tarot(commands.Cog, name="tarot"):
                 embed.set_image(url="attachment://" + result[0].filename)
 
                 await interaction.response.send_message(file=img, embed=embed)
+
+    @commands.hybrid_command(
+        name = "flush",
+        description = "Flush all the cards in your hand into the discard pile. Useful for fixing erroneous hands."
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def flush(self, context: Context):
+        minordeck, majordeck = self.get_decks(context.channel)
+        player = context.author.name
+
+        discards1 = minordeck.flush(player)
+        discards2 = majordeck.flush(player)
+        discardlist = discards1 + discards2
+
+        imagelist=[]
+        for card in discardlist:
+            imagelist.append(card.get_filepath())
+
+        #sets up the embed image
+        merge_images(imagelist)
+        img = discord.File(IMGDIR + MERGEDIMG, filename=MERGEDIMG)
+
+        embed = discord.Embed(
+                title = self.get_nick(context.author) + " flushes their hand into the discard pile!",
+                color=NEUTRALCOLOR,
+            )
+        embed.set_image(url="attachment://" + MERGEDIMG)
+
+        await context.send(embed=embed, file=img)
+
+
+
+
 
 
 
