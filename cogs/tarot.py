@@ -392,6 +392,7 @@ class Deck():
             return ("", "NOCARD")
         else:
             card = self.facedowns.pop(charname)
+            self.discardpile.append(card)
             return (card, "")
 
 
@@ -1450,7 +1451,7 @@ class Tarot(commands.Cog, name="tarot"):
 
     @app_commands.command(
         name = "discard_facedown",
-        description = "Discards curr    ent facedown card, if you cannot or don't want to activate it.'"
+        description = "Discards current facedown card, if you cannot or don't want to activate it."
     )
     @app_commands.describe(
         monster = "If you are the GM, name which monster's facedown card you want to discard!"
@@ -1508,6 +1509,75 @@ class Tarot(commands.Cog, name="tarot"):
                 img = discord.File(result[0].get_filepath(), filename=result[0].filename)
                 embed = discord.Embed(
                     title="The gamemaster " + self.get_nick(interaction.user) + " quietly discards the facedown card of " + monster + "...",
+                    description=desc,
+                    color=GMCOLOR,
+                )
+                embed.set_image(url="attachment://" + result[0].filename)
+
+                await interaction.response.send_message(file=img, embed=embed)
+
+
+    #reveal_facedown is kind of the same as discard_facdown, just with different flavor text...
+    @app_commands.command(
+        name = "reveal_facedown",
+        description = "Reveals your current facedown card, once its condition has been met!"
+    )
+    @app_commands.describe(
+        monster = "If you are the GM, name which monster's facedown card you want to reveal!"
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def reveal_facedown(self, interaction: discord.Interaction, monster: str=None):
+        minordeck, majordeck = self.get_decks(interaction.channel)
+        if monster is None:
+            #the user running this command is a player
+            result = minordeck.discard_facedown(interaction.user.name)
+
+            if result[1] == "NOCARD":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to reveal their facedown card, but they do not have one!",
+                    color=ERRORCOLOR
+                )
+                await interaction.response.send_message(embed=embed)
+            else:
+                #the discard was successful! show the card to everyone
+
+                desc = "It was a "
+                if result[0].is_reversed:
+                    desc += "**Reversed** *" + result[0].name + "*!"
+                else:
+                    desc += "*" + result[0].name + "*!"
+
+                img = discord.File(result[0].get_filepath(), filename=result[0].filename)
+                embed = discord.Embed(
+                    title="The adventurer " + self.get_nick(interaction.user) + " reveals their facedown card and springs into action!",
+                    description=desc,
+                    color=PLAYERCOLOR,
+                )
+                embed.set_image(url="attachment://" + result[0].filename)
+
+                await interaction.response.send_message(file=img, embed=embed)
+        else:
+            #the usr running this command is the GM
+            result = majordeck.discard_facedown(monster)
+
+            if result[1] == "NOCARD":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to reveal the facedown card of " + monster + ", but it does not have one!",
+                    color=ERRORCOLOR
+                )
+                await interaction.response.send_message(embed=embed)
+            else:
+                #the discard was successful! show the card to everyone
+
+                desc = "It was a "
+                if result[0].is_reversed:
+                    desc += "**Reversed** *" + result[0].name + "*!"
+                else:
+                    desc += "*" + result[0].name + "*!"
+
+                img = discord.File(result[0].get_filepath(), filename=result[0].filename)
+                embed = discord.Embed(
+                    title="The gamemaster " + self.get_nick(interaction.user) + " reveals the facedown card of " + monster + "!",
                     description=desc,
                     color=GMCOLOR,
                 )
