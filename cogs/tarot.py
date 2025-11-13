@@ -40,7 +40,7 @@ SHORTMAJOR = [
 ]
 
 MAJORNAME = [
-    "The Fool",
+    "Fool",
     "I - The Magician",
     "II - The High Priestess",
     "III - The Empress",
@@ -291,6 +291,25 @@ class Deck():
         self.discardpile.append(played)
 
         return (played, "")
+
+    def has_fool(self, username):
+        #checks if a player has The Fool. used to check for the /play_fool command without causing any irreversible changes first.
+        if username not in self.hands:
+            return "HANDEMPTY"
+
+        hand = self.hands[username]
+
+        if len(hand) == 0:
+            return "HANDEMPTY"
+
+        msg = "NO"
+        for i in range(len(hand)):
+            if hand[i].value == 0: #just need to check this, THe Fool is the only card in the Minor deck with a value of 0
+                msg = "YES"
+                break
+        return msg
+
+
 
 
 
@@ -664,7 +683,7 @@ class Tarot(commands.Cog, name="tarot"):
 
         output = minordeck.deal_cards(4, player) #deal hand to the player. use the player's unique username (instead of their mutable & non-unique Display Name) as the key
 
-        await context.interaction.response.defer()
+        await context.interaction.response.defer(ephemeral=True)
 
         if output[0] == "NOHAND":
             embed = discord.Embed(
@@ -709,7 +728,7 @@ class Tarot(commands.Cog, name="tarot"):
 
         output = majordeck.deal_cards(cardcount, player) #deal hand to the player. use the player's unique username (instead of their mutable & non-unique Display Name) as the key
 
-        await context.interaction.response.defer()
+        await context.interaction.response.defer(ephemeral=True)
 
         if output[0] == "NOHAND":
             embed = discord.Embed(
@@ -800,6 +819,90 @@ class Tarot(commands.Cog, name="tarot"):
                 embed.set_image(url="attachment://" + result[0].filename)
 
                 await interaction.response.send_message(file=img, embed=embed)
+
+
+
+    @app_commands.command(
+        name="play_fool",
+        description="Play The Fool + another Minor Arcana card in your hand, showing and then discarding them."
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    @app_commands.describe(
+        value="What is the number value of the card? Ace = 1, Page = 11, Knight = 12, Queen = 13, King = 14"
+    )
+    @app_commands.choices(suit=[
+        app_commands.Choice(name="Wands",value="wands"),
+        app_commands.Choice(name="Pentacles",value="pentacles"),
+        app_commands.Choice(name="Cups",value="cups"),
+        app_commands.Choice(name="Swords",value="swords")
+    ])
+    async def play_fool(self, interaction: discord.Interaction, value: int, suit: app_commands.Choice[str]):
+        minordeck, majordeck = self.get_decks(interaction.channel)
+
+        if value < 1 or value > 14:
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + " tried to play a card that does not exist!",
+                description = "Please check your input, adventurer :P",
+                color=ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed)
+        else :
+            #first, check if the player has the fool
+            hasfool = minordeck.has_fool(interaction.user.name)
+            if hasfool == "HANDEMPTY":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to play a card, but their hand is empty!",
+                    description = "Please be more careful, adventurer.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            elif hasfool == "NO":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to play the fool, but does not have it!",
+                    description = "Please /peek at your hand to see what cards you *can* play, adventurer.",
+                    color=ERRORCOLOR
+                )
+
+                await interaction.response.send_message(embed=embed)
+            else:
+                #attempt playing the other card first. if it is not there, we should not draw the fool
+                result = minordeck.play_card(value, suit.value, interaction.user.name) # run the play method
+
+                #check if card was not there
+                if result[1] == "NOCARD":
+                    embed = discord.Embed(
+                        title = self.get_nick(interaction.user) + " tried to play a card that they do not have!",
+                        description = "Please /peek at your hand to see what cards you *can* play, adventurer.",
+                        color=ERRORCOLOR
+                    )
+
+                    await interaction.response.send_message(embed=embed)
+                else:
+                    #the player was able to play the other card, AND they have the fool! play the fool now
+                    fool = minordeck.play_card(0, "major", interaction.user.name)
+
+                    #show output s normal
+                    desc = "You have played ***The Fool***, plus the "
+                    if result[0].is_reversed:
+                        desc += "**Reversed** *" + result[0].name + "*!"
+                    else:
+                        desc += "*" + result[0].name + "*!"
+
+
+                    #sets up the embed image
+                    merge_images([fool[0].get_filepath(), result[0].get_filepath()])
+                    img = discord.File(IMGDIR + MERGEDIMG, filename=MERGEDIMG)
+
+                    #img = discord.File(result[0].get_filepath(), filename=result[0].filename)
+                    embed = discord.Embed(
+                        title="The adventurer " + self.get_nick(interaction.user) + " plays The Fool!",
+                        description=desc,
+                        color=PLAYERCOLOR,
+                    )
+                    embed.set_image(url="attachment://" + MERGEDIMG)
+
+                    await interaction.response.send_message(file=img, embed=embed)
 
 
     @app_commands.command(
