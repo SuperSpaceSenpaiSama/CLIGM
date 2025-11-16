@@ -13,6 +13,7 @@ import os, random
 import math
 from PIL import Image
 from typing import List
+import time
 
 SHORTMAJOR = [
     "0-Fool",
@@ -93,6 +94,7 @@ NEUTRALCOLOR = 0xBEBEFE
 PLAYERCOLOR = 0x04BF22
 GMCOLOR = 0xF5DA27
 ERRORCOLOR = 0xBE0000
+BATTLECOLOR = 0xFE7777
 
 def merge_images(filelist):
     maxcol = 6 #maximum number of cards per row
@@ -432,6 +434,24 @@ class Deck():
         return (card, "")
 
 
+    #does NOT pop the card, simply changes its is_up value
+    def flip_initiative(self, charname):
+        if charname not in self.initiatives:
+            return("", "NOCARD")
+        else:
+            card = self.initiatives[charname]
+            card.is_up = True
+            return (card, "")
+
+    def discard_initiative (self, charname):
+        if charname not in self.initiatives:
+            return("", "NOCARD")
+        else:
+            card= self.initiatives.pop(charname)
+            self.discardpile.append(card)
+            return (card, "")
+
+
 
 
 # Here we name the cog and create a new class for the cog.
@@ -454,8 +474,18 @@ class Tarot(commands.Cog, name="tarot"):
 
         #for now, we're just doing one deck across the entire bot for testing purposes.
         #Will do per-channel instances later.
-        self.gm_deck = Deck(major=True)
-        self.player_deck = Deck(major=False)
+        #self.gm_deck = Deck(major=True)
+        #self.player_deck = Deck(major=False)
+
+        self.gm_decks = {}
+        self.player_decks = {}
+
+        self.initiative = {} # a dict with channel ids as the keys
+
+        self.gamemasters = {} # a dict with channel ids as the keys and User objects as the values
+
+        self.userids = {} #a dict with usernames as the keys and userids as the values. Submitted via /initiative, cleared at /end_of_round
+        self.usernicks = {}
 
     # Here you can just add your own commands, you'll always need to provide "self" as first parameter.
     def get_nick(self, user):
@@ -470,7 +500,24 @@ class Tarot(commands.Cog, name="tarot"):
 
     def get_decks(self, channel):
         # for now, just returns the two deck attributes, This will be useful once the bot is built to handle multiple decks per channel
-        return (self.player_deck, self.gm_deck)
+        #return (self.player_deck, self.gm_deck)
+
+
+        if channel.id not in self.player_decks:
+            self.player_decks[channel.id] = Deck(major=False)
+        if channel.id not in self.gm_decks:
+            self.gm_decks[channel.id] = Deck(major=True)
+
+        return (self.player_decks[channel.id], self.gm_decks[channel.id])
+
+
+    def get_initiative(self, channel):
+        return self.initiative
+
+    def get_gm(self, channel):
+        if channel.id not in self.gamemasters:
+            return None  # there is no gamemaster assigned to this channel
+        return self.gamemasters[channel.id]
 
     async def show_hand(self, interaction: discord.Interaction, deck: Deck, player: str, prefix: str):
         desc = ""
@@ -833,9 +880,9 @@ class Tarot(commands.Cog, name="tarot"):
         desc += "\n\n**INITIATIVE CARDS:**"
 
         for char in minordeck.initiatives:
-            desc += "\n" + char + ": " + minordeck.initiatives[char].name
+            desc += "\n" + char + ": " + minordeck.initiatives[char].name + ", is_up: " + str(minordeck.initiatives[char].is_up)
         for char in majordeck.initiatives:
-            desc += "\n" + char + ": " + majordeck.initiatives[char].name
+            desc += "\n" + char + ": " + majordeck.initiatives[char].name + ", is_up: " + str(majordeck.initiatives[char].is_up)
 
         embed = discord.Embed(
             title = "Debug: Decks Status",
@@ -1686,6 +1733,9 @@ class Tarot(commands.Cog, name="tarot"):
                 await interaction.response.send_message(embed=embed)
             else:
                 #the player was able to set their initiative
+                self.userids[interaction.user.name] = interaction.user.id
+                self.usernicks[interaction.user.name] = self.get_nick(interaction.user)
+
 
                 imagename = "cardbacks.png"
 
@@ -1698,6 +1748,8 @@ class Tarot(commands.Cog, name="tarot"):
                 embed.set_image(url="attachment://" + imagename)
 
                 await interaction.response.send_message(file=img, embed=embed)
+
+
 
 
     @app_commands.command(
@@ -1762,6 +1814,344 @@ class Tarot(commands.Cog, name="tarot"):
                 embed.set_image(url="attachment://" + imagename)
 
                 await interaction.response.send_message(file=img, embed=embed)
+
+    #does not discard the card, just makes it visible to everyone
+    @app_commands.command(
+        name = "flip_initiative",
+        description = "Manually flip over your facedown initiative card, in case you are being targeted by an enemy!"
+    )
+    @app_commands.describe(
+        monster = "If you are the GM, name which monster's initiative card you want to reveal!"
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def reveal_facedown(self, interaction: discord.Interaction, monster: str=None):
+        minordeck, majordeck = self.get_decks(interaction.channel)
+        if monster is None:
+            #the user running this command is a player
+            result = minordeck.flip_initiative(interaction.user.name)
+
+            if result[1] == "NOCARD":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to reveal their initiative card, but they do not have one!",
+                    color=ERRORCOLOR
+                )
+                await interaction.response.send_message(embed=embed)
+            else:
+                #the discard was successful! show the card to everyone
+
+                desc = "It is The "
+                if result[0].is_reversed:
+                    desc += "**Reversed** *" + result[0].name + "*!"
+                else:
+                    desc += "*" + result[0].name + "*!"
+
+                img = discord.File(result[0].get_filepath(), filename=result[0].filename)
+                embed = discord.Embed(
+                    title="The adventurer " + self.get_nick(interaction.user) + " reveals their initiative card in response to enemy assault!",
+                    description=desc,
+                    color=PLAYERCOLOR,
+                )
+                embed.set_image(url="attachment://" + result[0].filename)
+
+                await interaction.response.send_message(file=img, embed=embed)
+        else:
+            #the usr running this command is the GM
+            result = majordeck.flip_initiative(monster)
+
+            if result[1] == "NOCARD":
+                embed = discord.Embed(
+                    title = self.get_nick(interaction.user) + " tried to reveal the initiative card of " + monster + ", but it does not have one!",
+                    color=ERRORCOLOR
+                )
+                await interaction.response.send_message(embed=embed)
+            else:
+                #the discard was successful! show the card to everyone
+
+                desc = "It is the "
+                if result[0].is_reversed:
+                    desc += "**Reversed** *" + result[0].name + "*!"
+                else:
+                    desc += "*" + result[0].name + "*!"
+
+                img = discord.File(result[0].get_filepath(), filename=result[0].filename)
+                embed = discord.Embed(
+                    title="The gamemaster " + self.get_nick(interaction.user) + " reveals the initiative card of " + monster + "!",
+                    description=desc,
+                    color=GMCOLOR,
+                )
+                embed.set_image(url="attachment://" + result[0].filename)
+
+                await interaction.response.send_message(file=img, embed=embed)
+
+    @commands.hybrid_command(
+        name = "declare_gm",
+        description = "Declare yourself as the GM for this channel!"
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def declare_gm(self, context: Context):
+        self.gamemasters[context.channel.id] = context.author
+        await context.send(content="You have been declared as the Gamemaster for this channel!")
+
+
+
+    @commands.hybrid_command(
+        name =  "next_turn",
+        description = "Counts up to the next character whose turn it is!"
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def next_turn(self, context: Context):
+        minordeck, majordeck = self.get_decks(context.channel)
+        gamemaster = self.get_gm(context.channel)
+
+        initid = context.channel.id
+
+        if initid not in self.initiative:
+            self.initiative[initid] = 1
+
+        # we need to build a dict of every char's initiative score, irregardless of card.
+        init_pool = {}
+        for char in minordeck.initiatives:
+            init_pool[char] = minordeck.initiatives[char].value
+
+        for monster in majordeck.initiatives:
+            init_pool[":" + monster] = majordeck.initiatives[monster].value #monsters identifiably have a : in their name, to avoid name conflicts in the keys of init_pool
+
+        #check if init pool is empty
+        if not init_pool:
+            embed = discord.Embed(
+                title = "No one has any initiative cards down!",
+                description = "Please place down some initiative cards before playing.",
+                color = ERRORCOLOR
+            )
+            await context.send(embed=embed)
+            return None
+
+        max_initiative = max(init_pool.values())
+
+        embed = discord.Embed(
+            title = "The Dungeon counts up towards a bloody battle!",
+            description = "Current Initiative: " + str(self.initiative[initid]) + "\nLower initiatives go sooner, but are more vulnerable!",
+            color = BATTLECOLOR
+        )
+        await context.send(embed = embed)
+
+
+        #main countdown loop!!!
+        turn_goers = []
+        while self.initiative[initid] <= max_initiative:
+            if self.initiative[initid] in init_pool.values():
+                #it's someone's turn on this number! possibly many people!
+                for char in init_pool:
+                    if init_pool[char] == self.initiative[initid]:
+                        #this adventurer/monster's initiative matches! add them to turn_goers
+                        turn_goers.append(char)
+                await context.channel.send("***" + str(self.initiative[initid]) + "!***")
+                self.initiative[initid] += 1
+                break
+
+            else:
+                #it is not anyone's turn this number
+                await context.channel.send(str(self.initiative[initid]) + "...")
+                time.sleep(1)
+                self.initiative[initid] += 1
+
+        #check if this was the final turn
+        is_final = False
+        if self.initiative[initid] >= max_initiative:
+            is_final = True
+
+        #now, we check if we are announcing a turn!
+        if len(turn_goers) != 0:
+            #we have turns to announce!!
+            if len(turn_goers) == 1:
+                char = turn_goers[0]
+                #only one person is going! be detailed!
+                #first we get a ping for an adventurer, and the normal monster name for a monster
+                name=""
+                ping=""
+                card = 0
+                if char[0] == ":":
+                    card = majordeck.initiatives[(char[1:])]
+                    name = char[1:]
+
+                    if gamemaster is not None:
+                        ping = "<@" + str(gamemaster.id) + ">'s " + char[1:]
+                else:
+                    card = minordeck.initiatives[char]
+                    name = char
+                    if name in self.userids:
+                        ping = "<@" + str(self.userids[name]) + ">" #this should ping the user
+                    if name in self.usernicks:
+                        name = self.usernicks[name]
+
+                #set the flipped initiative card!
+                desc = "Their Initiative Card is "
+
+                if not card.is_up:
+                    desc += "revealed to be "
+                    card.is_up = True
+
+                if card.suit != "major":
+                    desc += "the "
+
+                if card.is_reversed:
+                    desc += "**Reversed** *" + card.name + "*!"
+                else:
+                    desc += "*" + card.name + "*!"
+
+                if is_final:
+                    desc += "\n\n This is the final turn of the round! Run /end_of_round afterwards!"
+
+                img = discord.File(card.get_filepath(), filename=card.filename)
+                embed = discord.Embed(
+                    title = "The spotlight shines on " + name + "!",
+                    description = desc,
+                    color = BATTLECOLOR
+                )
+                embed.set_image(url="attachment://" + card.filename)
+
+                await context.send(embed=embed, file=img)
+
+                if ping != "":
+                    await context.channel.send(content = "Go, " + ping + ", Dance!")
+
+            else:
+                #first, make sure we flip everyone's initiative cards face-up, and get their names and cards!
+                cardlist = [] #just filepaths for images
+                namelist = []
+                has_monster = False # see if we need to ping GM!
+                pinglist = "" #first we just add players to the pinglist
+                for char in turn_goers:
+                    if char[0] == ":":  #if it is a monster, we need to ignore the colon
+                        majordeck.initiatives[(char[1:])].is_up = True
+                        namelist.append(char[1:])
+                        cardlist.append(majordeck.initiatives[(char[1:])].get_filepath())
+                        has_monster = True
+                    else:
+                        minordeck.initiatives[char].is_up = True
+
+                        name = char
+                        if name in self.userids:
+                            pinglist += "<@" + str(self.userids[name]) + ">" #this should ping the user
+                        if name in self.usernicks:
+                            name = self.usernicks[name]
+                        namelist.append(name)
+                        cardlist.append(minordeck.initiatives[char].get_filepath())
+
+                ttl = ""
+                if has_monster:
+                    ttl = "Many combatants are raring to go! The gamemaster decides who goes first!"
+                    #also add GM to pinglist
+                    if gamemaster is not None:
+                        pinglist += "<@" + str(gamemaster.id) + ">"
+
+                else:
+                    ttl = "Many adventurers act together! Decide among yourselves who goes first!"
+
+                desc = "The following characters are ready to risk it all:"
+                for name in namelist:
+                    desc += "\n" + name + "!"
+
+                if is_final:
+                    desc += "\n\n This is the final turn of the round! Run /end_of_round after everyone has gone!"
+
+                #sets up the embed image
+                merge_images(cardlist)
+                img = discord.File(IMGDIR + MERGEDIMG, filename=MERGEDIMG)
+
+                embed = discord.Embed(
+                        title = ttl,
+                        description = desc,
+                        color=BATTLECOLOR,
+                    )
+                embed.set_image(url="attachment://" + MERGEDIMG)
+
+                await context.send(embed=embed, file=img)
+        else:
+            #There are no turn-goers. let ppl know
+            embed = discord.Embed(
+                title = "There is no one left to go!",
+                description = "Run /end_of_round if you haven't yet.",
+                color = NEUTRALCOLOR
+            )
+            await context.send(embed=embed)
+
+            await context.channel.send(content = pinglist)
+
+    @commands.hybrid_command(
+        name = "end_of_round",
+        description = "Resets initiative, initiative cards, and flushes everyone's hand.'"
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def end_of_round(self, context:Context):
+        minordeck, majordeck = self.get_decks(context.channel)
+
+        initid = context.channel.id
+
+        if initid not in self.initiative:
+            await context.send(content="The round hasn't started yet! What are yout trying to reset it for?")
+        else:
+            #reset the initiative
+            self.initiative.pop(initid)
+
+            cardlist = []
+
+            #do initiative cards
+            adventurers = []
+            for adventurer in minordeck.initiatives:
+                adventurers.append(adventurer)
+
+            for a in adventurers:
+                initcard = minordeck.discard_initiative(adventurer)
+                if initcard[1] == "NOCARD":
+                    await context.send(content="Error! Tried to discard an initiative card that doesn't exist! This should not happen!'")
+                    return None
+                cardlist.append(initcard[0].get_filepath())
+                #cleaning up our dictionaries
+                self.userids.pop(adventurer)
+                self.usernicks.pop(adventurer)
+
+            for monster in majordeck.initiatives:
+                initcard = majordeck.discard_initiative(monster)
+                if initcard[1] == "NOCARD":
+                    await context.send(content="Error! Tried to discard an initiative card that doesn't exist! This should not happen!'")
+                    return None
+                cardlist.append(initcard[0].get_filepath())
+                #same thing, but without dictionaries to clean
+
+            #do everyone's hands'
+            discardlist = []
+            minorhands = []
+            for hand in minordeck.hands:
+                minorhands.append(hand)
+
+            for hand in minorhands:
+                discardlist += minordeck.flush(hand)
+
+            majorhands = []
+            for hand in majordeck.hands:
+                majorhands.append(hand)
+
+            for hand in majorhands:
+                discardlist += majordeck.flush(hand)
+
+
+            for card in discardlist:
+                cardlist.append(card.get_filepath())
+
+
+            #sets up the embed image
+            merge_images(cardlist)
+            img = discord.File(IMGDIR + MERGEDIMG, filename=MERGEDIMG)
+
+            embed = discord.Embed(
+                    title = self.get_nick(context.author) + " ends the round!",
+                    description = "Initiative has been reset to 1. Hands and initiative cards have been discarded, though facedown cards remain!\n If *The Fool* was played this round, shuffle both decks now!",
+                    color=NEUTRALCOLOR,
+                )
+            embed.set_image(url="attachment://" + MERGEDIMG)
+
+            await context.send(embed=embed, file=img)
 
 
 
