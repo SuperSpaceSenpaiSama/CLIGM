@@ -903,6 +903,16 @@ class Tarot(commands.Cog, name="tarot"):
     async def debug(self, context: Context) -> None:
         minordeck, majordeck = self.get_decks(context.channel)
 
+        gamemaster = self.get_gm(context.channel)
+        if gamemaster is None or context.author.name != gamemaster.name:
+            embed = discord.Embed(
+                title = "Only the Gamemaster can use this command!",
+                description = "Please ask your GM about it.",
+                color = ERRORCOLOR
+            )
+            await context.send(embed=embed)
+            return None
+
         desc = "**PLAYER DRAWPILE:**"
 
         for card in minordeck.drawpile:
@@ -1029,6 +1039,16 @@ class Tarot(commands.Cog, name="tarot"):
     )
     async def deal_major(self, interaction: discord.Interaction, cardcount: int) -> None:
         minordeck, majordeck = self.get_decks(interaction.channel)
+
+        gamemaster = self.get_gm(interaction.channel)
+        if gamemaster is None or interaction.user.name != gamemaster.name:
+            embed = discord.Embed(
+                title = "Only the Gamemaster can use this command!",
+                description = "Please ask your GM about it.",
+                color = ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed)
+            return None
 
         player = interaction.user.name
 
@@ -1649,6 +1669,18 @@ class Tarot(commands.Cog, name="tarot"):
                 await interaction.response.send_message(file=img, embed=embed)
         else:
             #the usr running this command is the GM
+
+            #verify it really is GM
+            gamemaster = self.get_gm(interaction.channel)
+            if gamemaster is None or interaction.user.name != gamemaster.name:
+                embed = discord.Embed(
+                    title = "Only the Gamemaster can use this command for monsters!",
+                    description = "Please ask your GM about it.",
+                    color = ERRORCOLOR
+                )
+                await interaction.response.send_message(embed=embed)
+                return None
+
             result = majordeck.discard_facedown(monster)
 
             if result[1] == "NOCARD":
@@ -1719,6 +1751,17 @@ class Tarot(commands.Cog, name="tarot"):
         else:
             #the usr running this command is the GM
             result = majordeck.discard_facedown(monster)
+
+            #verify it's really the GM'
+            gamemaster = self.get_gm(interaction.channel)
+            if gamemaster is None or interaction.user.name != gamemaster.name:
+                embed = discord.Embed(
+                    title = "Only the Gamemaster can use this command for monsters!",
+                    description = "Please ask your GM about it.",
+                    color = ERRORCOLOR
+                )
+                await interaction.response.send_message(embed=embed)
+                return None
 
             if result[1] == "NOCARD":
                 embed = discord.Embed(
@@ -1928,6 +1971,17 @@ class Tarot(commands.Cog, name="tarot"):
         else:
             #the usr running this command is the GM
             result = majordeck.flip_initiative(monster)
+
+            #check if it's really the GM'
+            gamemaster = self.get_gm(interaction.channel)
+            if gamemaster is None or interaction.user.name != gamemaster.name:
+                embed = discord.Embed(
+                    title = "Only the Gamemaster can use this command for monsters!",
+                    description = "Please ask your GM about it.",
+                    color = ERRORCOLOR
+                )
+                await interaction.response.send_message(embed=embed)
+                return None
 
             if result[1] == "NOCARD":
                 embed = discord.Embed(
@@ -2156,6 +2210,18 @@ class Tarot(commands.Cog, name="tarot"):
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def end_of_round(self, context:Context):
         minordeck, majordeck = self.get_decks(context.channel)
+
+        #check that the GM is doing this
+        gamemaster = self.get_gm(context.channel)
+        if gamemaster is None or context.author.name != gamemaster.name:
+            embed = discord.Embed(
+                title = "Only the Gamemaster can use this command!",
+                description = "Please ask your GM about it.",
+                color = ERRORCOLOR
+            )
+            await context.send(embed=embed)
+            return None
+
 
         initid = context.channel.id
 
@@ -2629,6 +2695,17 @@ class Tarot(commands.Cog, name="tarot"):
     async def move_card(self, interaction: discord.Interaction, value: int, suit: app_commands.Choice[str], destination: app_commands.Choice[str]):
         minordeck, majordeck = self.get_decks(interaction.channel)
         player = interaction.user.name
+
+        #check if it's really the GM'
+        gamemaster = self.get_gm(interaction.channel)
+        if gamemaster is None or player != gamemaster.name:
+            embed = discord.Embed(
+                title = "Only the Gamemaster can use this command!",
+                description = "Please ask your GM about it.",
+                color = ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed)
+            return None
 
         #first, which deck is the card being drawn from?
         is_major = False
