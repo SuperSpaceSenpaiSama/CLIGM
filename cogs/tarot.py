@@ -135,7 +135,27 @@ def merge_images(filelist):
 
     result.save(IMGDIR + MERGEDIMG, "PNG")
 
+def merge_sideways(imagefile):
+    #this command always merges one upright card with the sidewaysback.png card.
+    gap_percent= 0.05
 
+
+    image1 = Image.open(imagefile)
+    image2 = Image.open("tarot/sidewaysbacks.png")
+
+    (w1, h1) = image1.size
+    (w2, h2) = image2.size
+    gap = round(gap_percent * w1)
+
+    final_w = w1 + gap + w2
+    final_h = h1
+
+    result = Image.new('RGBA', (final_w, final_h))
+
+    result.paste(im=image1, box=(0,0))
+    result.paste(im=image2, box=(w1 + gap, final_h - h2))
+
+    result.save(IMGDIR + MERGEDIMG, "PNG")
 
 
 
@@ -1609,7 +1629,7 @@ class Tarot(commands.Cog, name="tarot"):
     #reveal_facedown is kind of the same as discard_facdown, just with different flavor text...
     @app_commands.command(
         name = "reveal_facedown",
-        description = "Reveals your current facedown card, once its condition has been met!"
+        description = "Reveals and discards your facedown card, once it has been triggered!"
     )
     @app_commands.describe(
         monster = "If you are the GM, name which monster's facedown card you want to reveal!"
@@ -2152,6 +2172,392 @@ class Tarot(commands.Cog, name="tarot"):
             embed.set_image(url="attachment://" + MERGEDIMG)
 
             await context.send(embed=embed, file=img)
+
+    @commands.hybrid_command(
+        name = "check_table",
+        description = "Take a peek at everything on the table in your DMs"
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def check_table(self, context : Context):
+        minordeck, majordeck = self.get_decks(context.channel)
+
+        gamemaster = self.get_gm(context.channel)
+        gm_hand = None
+        if gamemaster is not None and gamemaster.name in majordeck.hands:
+            gm_hand = majordeck.hands[gamemaster.name]
+
+        #first, show all the players stuff
+        playertable = {} # a dict  with usern.name as a dict,
+        """
+        [0] = the hand
+        [1] = the initiative
+        [2] = the facedown
+        """
+
+        # gather all the info, hands first!
+        for player in minordeck.hands:
+            playertable[player] = [minordeck.hands[player]]
+
+        # next, all the initiativve cards. may need to add a new entry for handsless players
+        for player in minordeck.initiatives:
+            if player not in playertable:
+                playertable[player] = [[], minordeck.initiatives[player]]
+            else:
+                playertable[player].append(minordeck.initiatives[player])
+
+        #same for facedowns
+        for player in minordeck.facedowns:
+            if player not in playertable:
+                playertable[player] = [[], None, minordeck.facedowns[player]]
+            else:
+                playertable[player].append(minordeck.facedowns[player])
+
+        for player in playertable:
+            if len(playertable[player]) == 1:
+                playertable[player].append(None)
+                playertable[player].append(None)
+            elif len(playertable[player]) == 2:
+                playertable[player].append(None)
+
+        #now we have a full deck of player stuff! collect info on GM next
+
+        monstertable = {}
+        """
+        [0] = the initiative
+        [1] = the facedown
+        """
+
+        for monster in majordeck.initiatives:
+            monstertable[monster] = [majordeck.initiatives[monster]]
+
+        for monster in majordeck.facedowns:
+            if monster not  in monstertable:
+                monstertable[monster] = [None, majordeck.facedowns[monster]]
+            else:
+                monstertable[monster].append(majordeck.facedowns[monster])
+
+        for monster in monstertable:
+            if len(monstertable[monster]) == 1:
+                monstertable[monster].append(None)
+
+        #now that we have everything, we can start embedding!
+
+        embed2 = discord.Embed(
+            title = self.get_nick(context.author) + " checks the state of the table...",
+            color = NEUTRALCOLOR
+        )
+
+        await context.send(embed=embed2)
+
+
+        #make a DM channel first
+        channel = await context.author.create_dm()
+
+        await channel.send(content = "**On the Players' Side...**")
+
+        for p in playertable:
+            if context.author.name == p:
+                #if displaying your own cards...
+                handcount = len(playertable[p][0])
+                initcard = playertable[p][1]
+                facedown = playertable[p][2]
+
+                initimgname = "cardbacks.png"
+                initimgpath = IMGDIR + "cardbacks.png"
+                initblurb = ""
+
+                if initcard is not None: #show the init card either way
+                    initimgname = initcard.filename
+                    initimgpath = initcard.get_filepath()
+                    initblurb =  "of **" + str(initcard.value) + "**"
+
+
+                blurb = "1 card"
+                if handcount != 1:
+                    blurb = str(handcount) + " cards"
+                ttl =  "**Your** are holding " + blurb + " in your hand!"
+
+                if initcard is None and facedown is None:
+                    #just give hand info
+
+                    embed = discord.Embed(
+                        title = ttl,
+                        description = "You have no cards down on the table.",
+                        color = PLAYERCOLOR
+                    )
+
+                    await channel.send(embed=embed)
+
+                elif initcard is None:
+                    #there is a facedown card
+
+                    img = discord.File(facedown.get_filepath(), filename= facedown.filename)
+                    act = ""
+                    if facedown.is_main:
+                        act = "main-action"
+                    else:
+                        act = "minor-action"
+
+                    embed = discord.Embed(
+                        title = ttl,
+                        description = "You have the *" + facedown.name + "* as a " + act + " facedown card!",
+                        color = PLAYERCOLOR
+                    )
+                    embed.set_image(url="attachment://" + imgname)
+
+                    await channel.send(embed=embed, file=img)
+
+                elif facedown is None:
+                    #there is only a initiative card
+
+                    img = discord.File(initimgpath, filename= initimgname)
+
+                    embed = discord.Embed(
+                        title = ttl,
+                        description = "You have an Initiative " + initblurb + "!",
+                        color = PLAYERCOLOR
+                    )
+                    embed.set_image(url="attachment://" + initimgname)
+
+                    await channel.send(embed=embed, file=img)
+
+                else:
+                    #There is both an initiative and a facedown!
+                    act = ""
+                    imglist = [initimgpath, facedown.get_filepath()]
+                    merge_images(imglist)
+                    if facedown.is_main:
+                        act = "main-action"
+                    else:
+                        act = "minor-action"
+
+                    img = discord.File(IMGDIR + MERGEDIMG, filename=MERGEDIMG)
+                    embed = discord.Embed(
+                        title = ttl,
+                        description = "They have an Initiative " + initblurb + " and the *" + facedown.name + "* as a " + act + " facedown card!",
+                        color = PLAYERCOLOR
+                    )
+                    embed.set_image(url="attachment://" +MERGEDIMG)
+
+                    await channel.send(embed=embed, file=img)
+
+
+            else:
+                handcount = len(playertable[p][0])
+                initcard = playertable[p][1]
+                facedown = playertable[p][2]
+
+                initimgname = "cardbacks.png"
+                initimgpath = IMGDIR + "cardbacks.png"
+                initblurb = "card face-down"
+
+                if initcard is not None:
+                    if initcard.is_up:
+                        initimgname = initcard.filename
+                        initimgpath = initcard.get_filepath()
+                        initblurb = "of **" + str(initcard.value) + "**"
+
+
+                blurb = "1 card"
+                if handcount != 1:
+                    blurb = str(handcount) + " cards"
+                ttl =  self.usernicks[p] + " is holding " + blurb + " in their hand!"
+
+
+                if initcard is None and facedown is None:
+                    #just give hand info
+
+                    embed = discord.Embed(
+                        title = ttl,
+                        description = "They have no cards down on the table.",
+                        color = PLAYERCOLOR
+                    )
+
+                    await channel.send(embed=embed)
+
+                elif initcard is None:
+                    #there is a facedown card
+
+                    img = ""
+                    act = ""
+                    imgname = ""
+                    if facedown.is_main:
+                        img = discord.File(IMGDIR + "cardbacks.png", filename="cardbacks.png")
+                        act = "main-action"
+                        imgname = "cardbacks.png"
+                    else:
+                        img = discord.File(IMGDIR + "sidwaysbacks.png", filename="sidewaysbacks.png")
+                        act = "minor-action"
+                        imgname = 'sidewaysbacks.png'
+
+                    embed = discord.Embed(
+                        title = ttl,
+                        description = "They have a " + act + " card facedown!",
+                        color = PLAYERCOLOR
+                    )
+                    embed.set_image(url="attachment://" + imgname)
+
+                    await channel.send(embed=embed, file=img)
+
+                elif facedown is None:
+                    #there is only a initiative card
+
+                    img = discord.File(initimgpath, filename= initimgname)
+
+                    embed = discord.Embed(
+                        title = ttl,
+                        description = "They have an Initiative " + initblurb + "!",
+                        color = PLAYERCOLOR
+                    )
+                    embed.set_image(url="attachment://" + initimgname)
+
+                    await channel.send(embed=embed, file=img)
+
+                else:
+                    #There is both an initiative and a facedown!
+                    act = ""
+                    if facedown.is_main:
+                        imglist = [initimgpath, IMGDIR + "cardbacks.png"]
+                        merge_images(imglist)
+                        act = "main-action"
+                    else:
+                        merge_sideways(initimgpath)
+                        act = "minor-action"
+
+                    img = discord.File(IMGDIR + MERGEDIMG, filename=MERGEDIMG)
+                    embed = discord.Embed(
+                        title = ttl,
+                        description = "They have an Initiative " + initblurb + " and a " + act + " facedown card!",
+                        color = PLAYERCOLOR
+                    )
+                    embed.set_image(url="attachment://" +MERGEDIMG)
+
+                    await channel.send(embed=embed, file=img)
+
+        #check if the person sending this is gm
+        sender_is_gm = False
+        if gamemaster is not None and context.author.name == gamemaster.name:
+            sender_is_gm = True
+
+        await channel.send(content="**On the GM's side...**")
+
+        if gamemaster is not None:
+            if gm_hand is not None:
+                if len(gm_hand) == 1:
+                    await channel.send(content= "**The Gamemaster " + self.get_nick(gamemaster) + " is holding 1 card!**")
+                else:
+                    await channel.send(content= "**The Gamemaster " + self.get_nick(gamemaster) + " is holding " + str(len(gm_hand)) + " cards!**")
+            else:
+                await channel.send(content= "**The Gamemaster " + self.get_nick(gamemaster) + " is holding 0 cards!**")
+
+        for m in monstertable:
+            #we need to do the same for a monster, but monsters do not have hands
+            initcard = monstertable[m][0]
+            facedown = monstertable[m][1]
+
+            initimgname = "cardbacks.png"
+            initimgpath = IMGDIR + "cardbacks.png"
+            initblurb = "card face-down"
+
+            if initcard is not None:
+                if initcard.is_up or sender_is_gm:
+                    initimgname = initcard.filename
+                    initimgpath = initcard.get_filepath()
+                    initblurb = "of **" + str(initcard.value) + "**"
+
+            ttl =  m + " sits menacingly at the table!"
+
+
+            if initcard is None and facedown is None:
+                #just give hand info
+
+                embed = discord.Embed(
+                    title = ttl,
+                    description = "They have no cards down on the table.",
+                    color = GMCOLOR
+                )
+
+                await channel.send(embed=embed)
+
+            elif initcard is None:
+                #there is a facedown card
+
+                img = ""
+                desc = ""
+                imgname = ""
+
+                if sender_is_gm:
+                    img = discord.File(facedown.get_filepath(), filename= facedown.filename)
+                    imgname = facedown.filename
+                    act = ""
+                    if facedown.is_main:
+                        act = "main-action"
+                    else:
+                        act = "minor-action"
+                    desc = "They have the *" + facedown.name + "* as a " + act + " facedown card!"
+                elif facedown.is_main:
+                    img = discord.File(IMGDIR + "cardbacks.png", filename="cardbacks.png")
+                    desc = "They have a main-action card facedown!"
+                    imgname = "cardbacks.png"
+                else:
+                    img = discord.File(IMGDIR + "sidwaysbacks.png", filename="sidewaysbacks.png")
+                    desc = "They have a minor-action card facedown!"
+                    imgname = 'sidewaysbacks.png'
+
+                embed = discord.Embed(
+                    title = ttl,
+                    description = desc,
+                    color = PLAYERCOLOR
+                )
+                embed.set_image(url="attachment://" + imgname)
+
+                await channel.send(embed=embed, file=img)
+
+            elif facedown is None:
+                #there is only a initiative card
+
+                img = discord.File(initimgpath, filename= initimgname)
+
+                embed = discord.Embed(
+                    title = ttl,
+                    description = "They have an Initiative " + initblurb + "!",
+                    color = PLAYERCOLOR
+                )
+                embed.set_image(url="attachment://" + initimgname)
+
+                await channel.send(embed=embed, file=img)
+
+            else:
+                #There is both an initiative and a facedown!
+                desc = ""
+                if sender_is_gm:
+                    imglist = [initimgpath, facedown.get_filepath()]
+                    merge_images(imglist)
+                    act = ""
+                    if facedown.is_main:
+                        act = "main-action"
+                    else:
+                        act = "minor-action"
+                    desc = "They have an Initiative " + initblurb + " and the *" + facedown.name + "* as a " + act + " facedown card!"
+                elif facedown.is_main:
+                    imglist = [initimgpath, IMGDIR + "cardbacks.png"]
+                    merge_images(imglist)
+                    desc = "They have an Initiative " + initblurb + " and a main-action facedown card!"
+                else:
+                    merge_sideways(initimgpath)
+                    desc = "They have an Initiative " + initblurb + " and a minor-action facedown card!"
+
+                img = discord.File(IMGDIR + MERGEDIMG, filename=MERGEDIMG)
+                embed = discord.Embed(
+                    title = ttl,
+                    description = desc,
+                    color = PLAYERCOLOR
+                )
+                embed.set_image(url="attachment://" +MERGEDIMG)
+
+                await channel.send(embed=embed, file=img)
+
+
 
 
 
