@@ -308,6 +308,57 @@ class Deck():
         return ("", "NOCARD")
 
 
+    def debug_seek(self, username, value, suit, destination):
+        #tries to find a specific card in the discard pile and draw it into username's hand
+        if username not in self.hands and destination == "hand":
+            self.hands[username] = []
+
+        #search the discard pile first
+        card = None
+        found_in = ""
+        for i in range(len(self.discardpile)):
+            if self.discardpile[i].value == value and self.discardpile[i].suit == suit:
+                card = self.discardpile.pop(i)
+                found_in = "the discardpile"
+                break
+
+        #search drawpile next
+        if card is None:
+            for i in range(len(self.drawpile)):
+                if self.drawpile[i].value == value and self.drawpile[i].suit == suit:
+                    card = self.drawpile.pop(i)
+                    found_in = "the drawpile"
+                    break
+
+        #last, search hands
+        found = False
+        if card is None:
+            for p in self.hands:
+                hand = self.hands[p]
+                for i in range(len(hand)):
+                    if hand[i].value == value and hand[i].suit == suit:
+                        card = hand.pop(i)
+                        found_in = p + "'s hand"
+                        break
+                if card is not None:
+                    break
+
+
+        if card is not None:
+            if destination == "draw":
+                self.drawpile.append(card)
+            elif destination == "discard":
+                self.discardpile.append(card)
+            else:
+                self.hands[username].append(card)
+
+            return (card, found_in)
+
+
+        # if the card wasn't in the discard pile...
+        return ("", "NOCARD")
+
+
     def play_card(self, val, suit, username):
 
         if not self.has_hand(username):
@@ -1097,7 +1148,7 @@ class Tarot(commands.Cog, name="tarot"):
 
             embed = discord.Embed(
                 title = t,
-                description = "Wherever it is, you probably shouldn't be taking that card...'",
+                description = "Wherever it is, you probably shouldn't be taking that card...",
                 color=ERRORCOLOR
             )
 
@@ -1116,7 +1167,7 @@ class Tarot(commands.Cog, name="tarot"):
             img = discord.File(result[0].get_filepath(), filename=result[0].filename)
             embed = discord.Embed(
                 title = self.get_nick(interaction.user) + " searches the discard pile for *" + prefix + result[0].name +"*...",
-                description = "... and puts it in their hand! It's okay, we all make mistakes.'",
+                description = "... and puts it in their hand! It's okay, we all make mistakes.",
                 color = colr,
             )
             embed.set_image(url="attachment://" + result[0].filename)
@@ -2556,6 +2607,101 @@ class Tarot(commands.Cog, name="tarot"):
                 embed.set_image(url="attachment://" +MERGEDIMG)
 
                 await channel.send(embed=embed, file=img)
+
+
+    @app_commands.command(
+        name="move_card",
+        description="debug-only command for moving a card from anywhere to your hand or either pile"
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    @app_commands.choices(suit=[
+        app_commands.Choice(name="Wands",value="wands"),
+        app_commands.Choice(name="Pentacles",value="pentacles"),
+        app_commands.Choice(name="Cups",value="cups"),
+        app_commands.Choice(name="Swords",value="swords"),
+        app_commands.Choice(name="Major Arcana",value="major"),
+    ],
+    destination=[
+        app_commands.Choice(name="Draw Pile",value="draw"),
+        app_commands.Choice(name="Discard Pile", value="discard"),
+        app_commands.Choice(name="My Hand",value="hand")
+    ])
+    async def move_card(self, interaction: discord.Interaction, value: int, suit: app_commands.Choice[str], destination: app_commands.Choice[str]):
+        minordeck, majordeck = self.get_decks(interaction.channel)
+        player = interaction.user.name
+
+        #first, which deck is the card being drawn from?
+        is_major = False
+        if suit.value == "major" and value <= 21 and value >= 1:
+            is_major = True
+        elif suit.value == "major" and value == 0:
+            #the Fool counts as a minor card for this game
+            is_major = False
+        elif suit.value != "major" and value <= 14 and value >= 1:
+            is_major = False
+        else:
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + " searched the discard piles for a card that does not exist!",
+                description = "Please check your input, gamemaster!",
+                color=ERRORCOLOR
+            )
+            await interaction.response.send_message(embed=embed)
+            return None
+
+
+        #now we know we're seeking a valid card, try to obtain it and send it to destination!
+        result = ""
+        if is_major:
+            result = majordeck.debug_seek(player, value, suit.value, destination.value)
+        else:
+            result = minordeck.debug_seek(player, value, suit.value, destination.value)
+
+        #check if a card was found or not
+        if result[1] == "NOCARD":
+            t = self.get_nick(interaction.user) + " DEBUG-searched all piles for *"
+            if suit.value == "major":
+                if value == 0:
+                    t += "The "
+                t += MAJORNAME[value]
+            else:
+                t += "The " + VALUENAME[value] + suit.name
+            t+= "*, but it was not anywhere!"
+
+            embed = discord.Embed(
+                title = t,
+                description = "This **really** shouldn't happen! Please contact a developer.",
+                color=ERRORCOLOR
+            )
+
+            await interaction.response.send_message(embed=embed)
+            return None
+        else:
+            # the card was found!
+            colr = 0
+            if is_major:
+                colr = GMCOLOR
+                prefix = ""
+            else:
+                colr = PLAYERCOLOR
+                prefix = "The "
+
+            des = ""
+            if destination.value == "draw":
+                des = "the draw pile"
+            elif destination.value == "discard":
+                des = "the discard pile"
+            elif destination.value == "hand":
+                des = "their hand"
+
+            img = discord.File(result[0].get_filepath(), filename=result[0].filename)
+            embed = discord.Embed(
+                title = self.get_nick(interaction.user) + " fetches *" + prefix + result[0].name +"* from " + result[1] + "...",
+                description = "... and puts it in " + des + "! Please check out for card-type mixing.",
+                color = colr,
+            )
+            embed.set_image(url="attachment://" + result[0].filename)
+
+            await interaction.response.send_message(file=img, embed=embed)
 
 
 
