@@ -86,6 +86,12 @@ VALUENAME = [
 IMGDIR = "tarot/"
 IMGDIR_FLIPPED = "tarot_flipped/"
 
+#If you want to use your own tarot cards, put them in custom/ and custom_flipped/ with the same filenames and change the two values above as this
+"""
+IMGDIR = "custom/"
+IMGDIR = "custom_flipped"
+"""
+
 MERGEDIMG = "mergedimage.png"
 
 #the colors used for embed messages
@@ -1448,6 +1454,8 @@ class Tarot(commands.Cog, name="tarot"):
     async def flush(self, context: Context):
         minordeck, majordeck = self.get_decks(context.channel)
         player = context.author.name
+
+        await interaction.response.defer(ephemeral=True)
 
         discards1 = minordeck.flush(player)
         discards2 = majordeck.flush(player)
