@@ -2788,6 +2788,99 @@ class Tarot(commands.Cog, name="tarot"):
 
             await interaction.response.send_message(file=img, embed=embed)
 
+    @commands.hybrid_command(
+        name = "help_player",
+        description = "See how to use the His Majesty The Worm commands as a player!"
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def help_player(self, context: Context) -> None:
+        desc = """**NORMAL COMMANDS:**
+        /draw_minor: Draw a card from the Minor Arcana deck to test your fate, then discard it
+        /show_discard: Show the top card of the Minor Arcana discard pile
+        /shuffle_minor: Shuffle the Minor Arcana discard pile back into the draw pile
+
+        **CHALLENGE PHASE COMMANDS:**
+        /deal_minor: Draw 4 cards from the Minor Arcana deck, and deal them into your hand
+        /peek: Peek at your current hand
+        /play_minor: Play one of the cards in your deck, showing it to everyone and discarding it
+        /play_fool: Play The Fool alongside one other card to take an instant turn, showing and discarding both!
+        /check_table: Check the overall state of the table, including all facedown and initiative cards
+
+        **FACEODOWN CARD COMMANDS:**
+        /facedown_minor: Place one of your cards down as your Facedown Card, to reveal later!
+        /discard_facedown: Discard your current Facedown Card, for if you no longer wish to use it or it is no longer applicable
+        /reveal_facedown: Flip over your Facedown Card, revealing it to all and then discarding it!
+
+        **INITIATIVE CARD COMMANDS:**
+        /initiative: Place one of your cards down to act as your Initiative Card!
+        /flip_initiative: Manually flip over your Initiative Card, making it visible to all. Do this when you are targeted by an enemy action!
+
+
+        **DEBUG COMMANDS**
+        /specific_deal: Seek a specific card in the discard pile and deal it into your hand. Use this if you played/discarded a card erroneously!
+        /flush: Flush all cards in your hand into the discard pile, useful for fixing erronous hands."""
+
+        channel = await context.author.create_dm()
+
+        embed = discord.Embed(
+            title = "Hello, Adventurer! This is how you use CLIGM to play His Majesty The Worm"
+            description - desc,
+            color = PLAYERCOLOR
+        )
+        await channel.send(embed=embed)
+
+
+
+    @commands.hybrid_command(
+        name = "help_gm",
+        description = "See how to use the His Majesty The Worm commands as a gamemaster!"
+    )
+    @app_commands.guilds(discord.Object(id=1121934159988936724))
+    async def help_gm(self, context: Context) -> None:
+        desc = """/declare_gm: You have to run this to set yourself as the gamemaster of this channel, and access many of these commands
+
+        **NORMAL COMMANDS:**
+        /draw_major: Draw a card from the Major Arcana deck for whatever, then discard it
+        /draw_hidden_minor: Draw & discard a card from the Minor Arcana deck without showing it to anyone else
+        /show_discard: Show the top card of the Minor Arcana discard pile
+        /show_discard_major: Show the top card of the Major Arcana discard pile
+        /shuffle_minor: Shuffle the Minor Arcana discard pile back into the draw pile
+        /shuffle_major: Shuffle the Major Arcana discard pile back into the draw pile
+        /shuffle_both: Shuffle both decks simultaneously
+
+        **CHALLENGE PHASE COMMANDS:**
+        /deal_major: Draw a number of cards from the Major Arcana deck, and deal them into your hand
+        /peek: Peek at your current hand
+        /play_major: Play one of the cards in your deck, showing it to everyone and discarding it
+        /check_table: Check the overall state of the table, including all facedown and initiative cards
+
+        **FACEODOWN CARD COMMANDS:**
+        /facedown_major: Place one of your cards down as the Facedown Card for one of your monsters, to reveal later!
+        /discard_facedown: Discard a monster's Facedown Card, for if you no longer wish to use it or it is no longer applicable
+        /reveal_facedown: Flip over a monster's Facedown Card, revealing it to all and then discarding it!
+
+        **INITIATIVE CARD COMMANDS:**
+        /monster_initiative: Place one of your cards down to act as the Initiative Card for a monster!
+        /flip_initiative: Manually flip over a monster's Initiative Card, making it visible to all. Do this when it is targeted by an enemy action!
+        /next_turn: Count up the initiative towards whoever has the next turn!
+        /end_of_round: Ends the round. This resets the initiative count, and discards all hands and initiative cards
+
+
+
+        **DEBUG COMMANDS**
+        /debug: Show the entire state of the decks, including all hands and facedowns. Will reveal cards you shouldn't see!
+        /specific_deal: Seek a specific card in the discard pile and deal it into your hand. Use this if you played/discarded a card erroneously!
+        /move_card: Seek a specific card, take it from wherever it is, and then put it in either the discard pile, draw pile, or your hand. Debug only!
+        /flush: Flush all cards in your hand into the discard pile, useful for fixing erronous hands."""
+
+        channel = await context.author.create_dm()
+
+        embed = discord.Embed(
+            title = "Hello, Gamemaster! This is how you use CLIGM to play His Majesty The Worm"
+            description - desc,
+            color = PLAYERCOLOR
+        )
+        await channel.send(embed=embed)
 
 
 
