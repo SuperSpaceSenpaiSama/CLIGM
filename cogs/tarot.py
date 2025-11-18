@@ -2794,6 +2794,8 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def help_player(self, context: Context) -> None:
+        await context.send(content = "Check the help page in your DMs!")
+
         desc = """**NORMAL COMMANDS:**
         /draw_minor: Draw a card from the Minor Arcana deck to test your fate, then discard it
         /show_discard: Show the top card of the Minor Arcana discard pile
@@ -2823,8 +2825,8 @@ class Tarot(commands.Cog, name="tarot"):
         channel = await context.author.create_dm()
 
         embed = discord.Embed(
-            title = "Hello, Adventurer! This is how you use CLIGM to play His Majesty The Worm"
-            description - desc,
+            title = "Hello, Adventurer! This is how you use CLIGM to play His Majesty The Worm",
+            description = desc,
             color = PLAYERCOLOR
         )
         await channel.send(embed=embed)
@@ -2837,6 +2839,8 @@ class Tarot(commands.Cog, name="tarot"):
     )
     @app_commands.guilds(discord.Object(id=1121934159988936724))
     async def help_gm(self, context: Context) -> None:
+        await context.send(content = "Check the help page in your DMs!")
+
         desc = """/declare_gm: You have to run this to set yourself as the gamemaster of this channel, and access many of these commands
 
         **NORMAL COMMANDS:**
@@ -2876,9 +2880,9 @@ class Tarot(commands.Cog, name="tarot"):
         channel = await context.author.create_dm()
 
         embed = discord.Embed(
-            title = "Hello, Gamemaster! This is how you use CLIGM to play His Majesty The Worm"
-            description - desc,
-            color = PLAYERCOLOR
+            title = "Hello, Gamemaster! This is how you use CLIGM to play His Majesty The Worm",
+            description = desc,
+            color = GMCOLOR
         )
         await channel.send(embed=embed)
 
