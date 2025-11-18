@@ -89,7 +89,7 @@ IMGDIR_FLIPPED = "tarot_flipped/"
 #If you want to use your own tarot cards, put them in custom/ and custom_flipped/ with the same filenames and change the two values above as this
 """
 IMGDIR = "custom/"
-IMGDIR = "custom_flipped"
+IMGDIR_FLIPPED = "custom_flipped/"
 """
 
 MERGEDIMG = "mergedimage.png"
